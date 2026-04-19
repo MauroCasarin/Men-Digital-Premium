@@ -171,13 +171,33 @@ export default function ClientApp() {
     }
   }, [activeOrderId, checkoutStep]);
 
-  const categories = ['Menú', 'Bebidas'];
+  const [products, setProducts] = useState<Product[]>(PRODUCTS);
+  const [categories, setCategories] = useState<string[]>(['Menú', 'Bebidas']);
+
+  useEffect(() => {
+    // Attempt to load products from Supabase
+    const fetchProducts = async () => {
+      try {
+        const { data, error } = await supabase.from('menu_items').select('*').order('category', { ascending: false });
+        if (data && data.length > 0) {
+          setProducts(data as Product[]);
+          const cats = Array.from(new Set((data as Product[]).map(p => p.category)));
+          if (cats.length > 0) setCategories(cats);
+        }
+      } catch (err) {
+        console.warn('Using fallback products, menu_items table may not exist yet.');
+      }
+    };
+    fetchProducts();
+  }, []);
 
   const filteredProducts = useMemo(() => {
-    return PRODUCTS.filter(p => p.category === activeCategory);
-  }, [activeCategory]);
+    return products.filter(p => p.category === activeCategory);
+  }, [activeCategory, products]);
 
-  const featuredProduct = PRODUCTS[1]; // Hamburguesa Trufada
+  const recommendations = useMemo(() => {
+    return products.filter(p => p.is_recommendation === true);
+  }, [products]);
 
   const total = useMemo(() => {
     return cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
@@ -396,37 +416,39 @@ export default function ClientApp() {
             ))}
         </div>
 
-        {/* Featured / Special Bento Item */}
-        <motion.div 
-          whileHover={{ y: -4, shadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)' }}
-          transition={{ duration: 0.2 }}
-          className="bento-card md:col-span-1 md:row-span-2 bg-[#1a1810] border-[#443a10] overflow-hidden group min-h-[400px]"
-        >
-          <div className="absolute inset-0 opacity-20 group-hover:opacity-40 transition-opacity duration-500">
-            <img src={featuredProduct.image} alt="" className="w-full h-full object-cover" />
-          </div>
-          <div className="relative z-10 h-full flex flex-col justify-end">
-            <span className="inline-block px-2 py-1 bg-accent text-black text-[10px] font-extrabold rounded mb-3 self-start">CHEF'S PICK</span>
-            <h2 className="text-4xl font-extrabold leading-none mb-4 text-white">
-              {featuredProduct.name.split(' ').map((word, i) => (
-                <span key={i} className="block">{word}</span>
-              ))}
-            </h2>
-            <p className="text-sm text-text-dim mb-8 max-w-xs leading-relaxed">{featuredProduct.description}</p>
-            <div className="flex items-center justify-between">
-              <span className="text-3xl font-bold text-accent tracking-tighter">${featuredProduct.price.toFixed(2)}</span>
-              <button 
-                onClick={() => addToCart(featuredProduct)}
-                className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-3xl font-light hover:bg-accent hover:text-black transition-all shadow-xl hover:rotate-90"
-              >
-                +
-              </button>
+        {recommendations.length > 0 && recommendations.map(rec => (
+          <motion.div 
+            key={`rec-${rec.id}`}
+            whileHover={{ y: -4, shadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)' }}
+            transition={{ duration: 0.2 }}
+            className={`bento-card ${recommendations.length === 1 ? 'md:col-span-1 md:row-span-2 min-h-[400px]' : 'md:col-span-1 min-h-[250px]'} bg-[#1a1810] border-[#443a10] overflow-hidden group`}
+          >
+            <div className="absolute inset-0 opacity-20 group-hover:opacity-40 transition-opacity duration-500">
+              {rec.image && <img src={rec.image} alt="" className="w-full h-full object-cover" />}
             </div>
-          </div>
-        </motion.div>
+            <div className="relative z-10 h-full flex flex-col justify-end">
+              <span className="inline-block px-2 py-1 bg-accent text-black text-[10px] font-extrabold rounded mb-3 self-start">RECOMENDACIÓN</span>
+              <h2 className="text-4xl font-extrabold leading-none mb-4 text-white">
+                {rec.name.split(' ').map((word, i) => (
+                  <span key={i} className="block">{word}</span>
+                ))}
+              </h2>
+              <p className="text-sm text-text-dim mb-8 max-w-xs leading-relaxed">{rec.description}</p>
+              <div className="flex items-center justify-between">
+                <span className="text-3xl font-bold text-accent tracking-tighter">${rec.price.toFixed(2)}</span>
+                <button 
+                  onClick={() => addToCart(rec)}
+                  className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-3xl font-light hover:bg-accent hover:text-black transition-all shadow-xl hover:rotate-90"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        ))}
 
         {/* Dynamic Product Grid Items */}
-        {filteredProducts.filter(p => p.id !== featuredProduct.id).slice(0, 2).map((product) => (
+        {filteredProducts.filter(p => !p.is_recommendation).map((product) => (
           <motion.div 
             key={product.id}
             whileHover={{ scale: 1.02, y: -2 }}
@@ -686,7 +708,7 @@ export default function ClientApp() {
 
         {/* Mobile items remaining (Full list for mobile if not empty) */}
         <div className="md:hidden space-y-4 mt-4">
-           {filteredProducts.filter(p => p.id !== featuredProduct.id).slice(2).map((product) => (
+           {filteredProducts.filter(p => !p.is_recommendation).map((product) => (
               <motion.div 
                 key={product.id} 
                 whileTap={{ scale: 0.98 }}

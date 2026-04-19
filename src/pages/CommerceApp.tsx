@@ -1,12 +1,45 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { UtensilsCrossed, Clock, CheckCircle, Package, ChevronDown, ChevronUp } from 'lucide-react';
+import { UtensilsCrossed, Clock, CheckCircle, Package, ChevronDown, ChevronUp, Settings, Plus, Save, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { Order } from '../types';
+import { Order, Product } from '../types';
+import { PRODUCTS } from '../constants';
 
 export default function CommerceApp() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<'orders' | 'config'>('orders');
+  
+  const [menuItems, setMenuItems] = useState<Product[]>(PRODUCTS);
+  const [dbErrorSql, setDbErrorSql] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const fetchMenu = async () => {
+      try {
+        const { data, error } = await supabase.from('menu_items').select('*').order('category', { ascending: false });
+        if (error) {
+          if (error.code === '42P01') { // relation does not exist
+            setDbErrorSql(`CREATE TABLE IF NOT EXISTS menu_items (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  price NUMERIC NOT NULL,
+  image TEXT,
+  category TEXT NOT NULL,
+  is_recommendation BOOLEAN DEFAULT false
+);`);
+          }
+          throw error;
+        }
+        if (data && data.length > 0) setMenuItems(data as Product[]);
+        setDbErrorSql(null);
+      } catch (err) {
+        console.warn("Using local fallback MENU items due to missing DB.");
+      }
+    };
+    fetchMenu();
+  }, []);
 
   const toggleExpand = (id: string, e?: any) => {
     if (e && e.stopPropagation) e.stopPropagation();
@@ -107,20 +140,160 @@ export default function CommerceApp() {
   const activeOrders = orders.filter(o => !['delivered', 'completed'].includes(o.status));
   const pastOrders = orders.filter(o => ['delivered', 'completed'].includes(o.status));
 
+  const handleProductChange = (index: number, field: keyof Product, value: any) => {
+    const newItems = [...menuItems];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setMenuItems(newItems);
+  };
+
+  const handleAddProduct = () => {
+    const newId = `new-${Math.random().toString(36).substr(2, 6)}`;
+    setMenuItems([{ id: newId, name: '', description: '', price: 0, category: 'Menú', image: '', is_recommendation: false }, ...menuItems]);
+  };
+
+  const handleDeleteProduct = (id: string | number) => {
+    setMenuItems(menuItems.filter(p => p.id !== id));
+  };
+
+  const saveMenuConfig = async () => {
+    setIsSaving(true);
+    try {
+      const { error } = await supabase.from('menu_items').upsert(menuItems);
+      if (error) {
+        if (error.code === '42P01') {
+          setDbErrorSql(`CREATE TABLE IF NOT EXISTS menu_items (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  price NUMERIC NOT NULL,
+  image TEXT,
+  category TEXT NOT NULL,
+  is_recommendation BOOLEAN DEFAULT false
+);`);
+        }
+        throw error;
+      }
+      alert("Menú guardado correctamente.");
+      setDbErrorSql(null);
+    } catch (e: any) {
+      console.error(e);
+      alert("Error al guardar. " + e.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-bg-dark text-white p-6 md:p-10 font-sans">
-      <header className="bento-card mb-8 p-6 flex justify-between items-center bg-card-dark border-border-dark">
+      <header className="bento-card mb-8 p-6 flex flex-col md:flex-row justify-between items-center gap-6 bg-card-dark border-border-dark">
         <h1 className="text-2xl md:text-3xl font-extrabold flex items-center gap-3">
           <UtensilsCrossed className="text-accent" size={32} />
           Panel de <span className="text-accent">Comercio</span>
         </h1>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
-          <span className="text-sm font-bold text-gray-400">Escuchando pedidos</span>
+        
+        <div className="flex bg-[#222] p-1 rounded-2xl w-full md:w-auto overflow-hidden">
+          <button 
+            onClick={() => setActiveTab('orders')}
+            className={`flex-1 md:w-32 py-2 text-sm font-bold rounded-xl transition-all ${activeTab === 'orders' ? 'bg-accent text-black shadow-lg shadow-accent/20' : 'text-gray-400 hover:text-white'}`}
+          >
+            Pedidos
+          </button>
+          <button 
+            onClick={() => setActiveTab('config')}
+            className={`flex-1 md:w-40 py-2 text-sm font-bold rounded-xl transition-all ${activeTab === 'config' ? 'bg-white text-black shadow-lg shadow-white/20' : 'text-gray-400 hover:text-white'}`}
+          >
+            Menú & Config
+          </button>
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      {activeTab === 'config' && (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+        >
+          {dbErrorSql && (
+            <div className="bg-red-500/10 border border-red-500/50 p-6 rounded-2xl">
+              <h3 className="text-red-500 font-bold mb-2 text-lg">⚠️ Base de datos no encontrada</h3>
+              <p className="text-sm text-red-200 mb-4">Para que los cambios del menú se guarden y envíen a los clientes, debes crear la tabla <strong>menu_items</strong> en tu Supabase SQL Editor. Copia y ejecuta este código:</p>
+              <pre className="bg-[#111] p-4 rounded-xl text-xs text-gray-300 overflow-x-auto border border-[#333]">
+                {dbErrorSql}
+              </pre>
+            </div>
+          )}
+
+          <div className="flex justify-between items-center bg-card-dark p-6 rounded-2xl border border-border-dark">
+            <div>
+              <h2 className="text-xl font-bold mb-1">Editor del Menú</h2>
+              <p className="text-sm text-text-dim">Carga los combos, cervezas, activa o desactiva la "Recomendación" y cambia los precios.</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={handleAddProduct} className="flex items-center gap-2 bg-[#333] hover:bg-[#444] text-white px-4 py-2 rounded-xl font-bold transition-colors">
+                <Plus size={18} /> Agregar
+              </button>
+              <button disabled={isSaving} onClick={saveMenuConfig} className="flex items-center gap-2 bg-accent hover:bg-yellow-400 text-black px-6 py-2 rounded-xl font-bold transition-colors">
+                <Save size={18} /> {isSaving ? 'Guardando...' : 'Guardar Todo'}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {menuItems.map((product, index) => (
+              <div key={product.id} className="bg-card-dark border border-border-dark p-6 rounded-2xl flex flex-col gap-4 relative">
+                <button onClick={() => handleDeleteProduct(product.id)} className="absolute top-4 right-4 p-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-colors">
+                  <Trash2 size={20} />
+                </button>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Nombre del producto</label>
+                    <input type="text" value={product.name} onChange={e => handleProductChange(index, 'name', e.target.value)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-medium" />
+                  </div>
+                  <div>
+                     <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Categoría</label>
+                      <select value={product.category} onChange={e => handleProductChange(index, 'category', e.target.value)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-medium">
+                        <option value="Menú">Menú</option>
+                        <option value="Bebidas">Bebidas</option>
+                      </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-[1fr_120px] gap-4">
+                  <div>
+                     <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Descripción Breve</label>
+                     <input type="text" value={product.description} onChange={e => handleProductChange(index, 'description', e.target.value)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-gray-300 text-sm" />
+                  </div>
+                  <div>
+                     <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Precio ($)</label>
+                     <input type="number" step="0.01" value={product.price} onChange={e => handleProductChange(index, 'price', parseFloat(e.target.value) || 0)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-accent font-bold" />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 border-t border-border-dark pt-4 mt-2">
+                  <div className="flex-1">
+                     <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">URL Imagen (Opcional)</label>
+                     <input type="text" placeholder="/ruta-o-https://..." value={product.image || ''} onChange={e => handleProductChange(index, 'image', e.target.value)} className="w-full bg-[#111] border border-[#333] p-2 rounded-lg focus:border-accent focus:outline-none text-gray-400 text-xs" />
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer pt-4">
+                    <input type="checkbox" checked={product.is_recommendation || false} onChange={e => handleProductChange(index, 'is_recommendation', e.target.checked)} className="w-5 h-5 accent-accent" />
+                    <span className="font-bold text-sm text-yellow-500">¿Recomendación?</span>
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {activeTab === 'orders' && (
+        <>
+          <header className="mb-6 flex justify-between items-center opacity-0 h-0 hidden">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
+              <span className="text-sm font-bold text-gray-400">Escuchando pedidos</span>
+            </div>
+          </header>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         <AnimatePresence>
           {activeOrders.map((order) => {
             return (
@@ -294,6 +467,9 @@ export default function CommerceApp() {
           ${orders.reduce((acc, order) => acc + order.total, 0).toFixed(2)}
         </div>
       </div>
+
+        </>
+      )}
     </div>
   );
 }
