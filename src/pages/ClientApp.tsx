@@ -27,7 +27,10 @@ export default function ClientApp() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showCartMobile, setShowCartMobile] = useState(false);
   const [activeCategory, setActiveCategory] = useState('Menú');
-  const [checkoutStep, setCheckoutStep] = useState<'cart' | 'payment' | 'success'>('cart');
+  const [checkoutStep, setCheckoutStep] = useState<'cart' | 'details' | 'payment' | 'tracking'>('cart');
+  const [customerName, setCustomerName] = useState('');
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+  const [activeOrderStatus, setActiveOrderStatus] = useState<string>('');
 
   const categories = ['Menú', 'Bebidas'];
 
@@ -82,29 +85,63 @@ export default function ClientApp() {
   };
 
   const handleCheckout = async (paymentMethod: string) => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || !customerName.trim()) return;
 
     setIsProcessing(true);
     try {
+      // 1. Verify if the name is already taken by a currently active order
+      const { data: existingOrders, error: fetchError } = await supabase
+        .from('orders')
+        .select('*')
+        .ilike('customer_name', customerName.trim()) // Use ilike for case-insensitive match
+        .neq('status', 'delivered');
+        
+      if (fetchError) throw fetchError;
+      
+      if (existingOrders && existingOrders.length > 0) {
+        alert('Este nombre ya está registrado en un pedido activo. Por favor, elige otro nombre o añade tu apellido.');
+        return;
+      }
+
+      // 2. Generate Order ID
       const orderId = 'ORD-' + Math.random().toString(36).substr(2, 6).toUpperCase();
       
+      // 3. Insert the order
       const { error } = await supabase.from('orders').insert([{
         id: orderId,
         items: cart,
         total: total,
         status: 'pending',
         payment_method: paymentMethod,
-        customer_name: 'Cliente Local' // You could add a field for this
+        customer_name: customerName.trim()
       }]);
 
       if (error) throw error;
       
-      setCheckoutStep('success');
-      setTimeout(() => {
-        setCart([]);
-        setCheckoutStep('cart');
-        setShowCartMobile(false);
-      }, 3000);
+      // 4. Setup state for tracking view
+      setActiveOrderId(orderId);
+      setActiveOrderStatus('pending');
+      setCheckoutStep('tracking');
+      
+      // We do not clear the cart yet so they don't lose it if they refresh before we're fully tracking, 
+      // but essentially they are in tracking mode now.
+      
+      // Listen to status updates for this specific order
+      const channel = supabase
+        .channel(`public:orders:id=eq.${orderId}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${orderId}` },
+          (payload) => {
+            setActiveOrderStatus(payload.new.status);
+            
+            if (payload.new.status === 'ready') {
+              if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]);
+              playNotificationSound();
+            }
+          }
+        )
+        .subscribe();
       
     } catch (error) {
       console.error(error);
@@ -112,6 +149,42 @@ export default function ClientApp() {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const playNotificationSound = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // Pitch
+      oscillator.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.3); // Drop pitch
+      gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      oscillator.start();
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
+      oscillator.stop(audioCtx.currentTime + 0.5);
+      
+      setTimeout(() => {
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.connect(gain2);
+        gain2.connect(audioCtx.destination);
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(880, audioCtx.currentTime);
+        gain2.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        osc2.start();
+        gain2.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
+        osc2.stop(audioCtx.currentTime + 0.5);
+      }, 150);
+    } catch(e) {}
+  };
+
+  const handleOnTheWay = async () => {
+    if (!activeOrderId) return;
+    await supabase.from('orders').update({ status: 'on_the_way' }).eq('id', activeOrderId);
+    setActiveOrderStatus('on_the_way');
   };
 
   return (
@@ -243,14 +316,68 @@ export default function ClientApp() {
 
           <div className="flex-1 overflow-auto space-y-6 pr-2 scrollbar-thin scrollbar-thumb-accent/20">
             <AnimatePresence mode="popLayout" initial={false}>
-              {checkoutStep === 'success' ? (
+              {checkoutStep === 'tracking' ? (
                  <motion.div 
                    initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-                   className="h-full flex flex-col items-center justify-center text-center gap-4 text-accent py-12"
+                   className="h-full flex flex-col items-center justify-center text-center gap-6 text-white py-12 px-4"
                  >
-                   <CheckCircle size={64} className="mb-2" />
-                   <h3 className="text-xl font-bold text-white">¡Pedido Confirmado!</h3>
-                   <p className="text-sm text-text-dim">El comercio ya está preparando tu orden.</p>
+                   {activeOrderStatus === 'on_the_way' ? (
+                     <>
+                        <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity, duration: 1 }}>
+                           <Clock size={80} className="text-orange-500 mb-4 mx-auto" />
+                        </motion.div>
+                        <h3 className="text-2xl font-bold text-white tracking-tight text-orange-500">¡Ve al mostrador!</h3>
+                        <p className="text-sm text-text-dim">Te estamos esperando para entregarte tu pedido.</p>
+                     </>
+                   ) : activeOrderStatus === 'ready' ? (
+                     <>
+                        <motion.div 
+                           initial={{ scale: 0.8 }}
+                           animate={{ scale: [0.8, 1.2, 1] }} 
+                           transition={{ duration: 0.5, type: 'spring' }}
+                        >
+                           <UtensilsCrossed size={80} className="text-accent mb-4 mx-auto drop-shadow-[0_0_15px_rgba(255,204,0,0.5)]" />
+                        </motion.div>
+                        <h3 className="text-3xl font-black text-accent tracking-tighter">¡PEDIDO LISTO<br/>PARA RETIRAR!</h3>
+                        <p className="text-base text-gray-300 font-medium w-full">Acércate al mostrador indicando el nombre:<br/><span className="text-white font-black text-xl bg-[#222] px-4 py-2 rounded-xl inline-block mt-3 border border-border-dark w-full">{customerName}</span></p>
+                        
+                        <button 
+                          onClick={handleOnTheWay}
+                          className="mt-6 w-full py-4 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-xl shadow-orange-500/20 transition-all uppercase tracking-widest text-xs"
+                        >
+                          Estoy en camino a retirar
+                        </button>
+                     </>
+                   ) : activeOrderStatus === 'preparing' ? (
+                     <>
+                        <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 8, ease: 'linear' }}>
+                           <UtensilsCrossed size={64} className="text-blue-400 mb-2 mx-auto" />
+                        </motion.div>
+                        <h3 className="text-2xl font-bold text-white tracking-tight">Preparando tu pedido</h3>
+                        <p className="text-sm text-text-dim">¡El comercio ya está trabajando en lo tuyo!</p>
+                     </>
+                   ) : (
+                     <>
+                        <Clock size={64} className="text-yellow-500 mb-2 mx-auto animate-pulse" />
+                        <h3 className="text-2xl font-bold text-white tracking-tight">Pedido Enviado</h3>
+                        <p className="text-sm text-text-dim">Esperando que el comercio comience a prepararlo.</p>
+                     </>
+                   )}
+                 </motion.div>
+              ) : checkoutStep === 'details' ? (
+                 <motion.div 
+                   initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                   className="flex flex-col gap-4 py-4"
+                 >
+                   <h3 className="text-lg font-bold text-white mb-2">¿A nombre de quién?</h3>
+                   <p className="text-xs text-text-dim mb-2">Ingresa tu nombre para identificarte al retirar.</p>
+                   <input
+                     type="text"
+                     value={customerName}
+                     onChange={(e) => setCustomerName(e.target.value)}
+                     placeholder="Tu Nombre o Apellido"
+                     className="w-full bg-[#222] border border-border-dark text-white p-4 rounded-xl focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-all font-bold text-lg"
+                   />
                  </motion.div>
               ) : checkoutStep === 'payment' ? (
                  <motion.div 
@@ -279,7 +406,7 @@ export default function ClientApp() {
                        <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
                          <Clock size={16} />
                        </motion.div>
-                       <span className="text-sm font-bold animate-pulse">Procesando pago...</span>
+                       <span className="text-sm font-bold animate-pulse">Procesando pedido...</span>
                      </div>
                    )}
                  </motion.div>
@@ -355,17 +482,50 @@ export default function ClientApp() {
             {checkoutStep === 'cart' ? (
               <button 
                 disabled={cart.length === 0}
-                onClick={() => setCheckoutStep('payment')}
+                onClick={() => setCheckoutStep('details')}
                 className="w-full bg-accent disabled:bg-accent/20 disabled:text-text-dim text-black py-5 rounded-2xl font-black text-sm tracking-[0.2em] uppercase transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center shadow-xl shadow-accent/10 relative"
               >
                 <span>CONTINUAR AL PAGO</span>
               </button>
+            ) : checkoutStep === 'details' ? (
+               <div className="flex flex-col gap-3 w-full">
+                 <button 
+                  onClick={() => {
+                    if(!customerName.trim()){
+                      alert("Por favor ingresa tu nombre.");
+                      return;
+                    }
+                    setCheckoutStep('payment')
+                   }}
+                  className="w-full bg-accent text-black py-5 rounded-2xl font-black text-sm tracking-[0.2em] uppercase transition-all shadow-xl shadow-accent/10"
+                >
+                  SIGUIENTE
+                </button>
+                <button 
+                  onClick={() => setCheckoutStep('cart')}
+                  className="w-full border border-border-dark text-white py-4 rounded-2xl font-bold text-sm transition-colors hover:bg-white/5"
+                >
+                  VOLVER AL CARRITO
+                </button>
+               </div>
             ) : checkoutStep === 'payment' && !isProcessing ? (
                <button 
-                onClick={() => setCheckoutStep('cart')}
+                onClick={() => setCheckoutStep('details')}
                 className="w-full border border-border-dark text-white py-4 rounded-2xl font-bold text-sm transition-colors hover:bg-white/5"
               >
-                VOLVER AL CARRITO
+                VOLVER ATRÁS
+              </button>
+            ) : checkoutStep === 'tracking' && activeOrderStatus === 'delivered' ? (
+               <button 
+                onClick={() => {
+                  setCart([]);
+                  setCheckoutStep('cart');
+                  setCustomerName('');
+                  setActiveOrderId(null);
+                }}
+                className="w-full bg-white text-black py-5 rounded-2xl font-black text-sm tracking-[0.2em] uppercase transition-all shadow-xl"
+              >
+                HACER NUEVO PEDIDO
               </button>
             ) : null}
           </div>
@@ -423,7 +583,52 @@ export default function ClientApp() {
               </div>
               
               <div className="flex-1 overflow-auto p-6 space-y-6">
-                {cart.length === 0 ? (
+                {checkoutStep === 'tracking' ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center gap-6 text-white py-12 px-4">
+                   {activeOrderStatus === 'on_the_way' ? (
+                     <>
+                        <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity, duration: 1 }}>
+                           <Clock size={80} className="text-orange-500 mb-4 mx-auto" />
+                        </motion.div>
+                        <h3 className="text-2xl font-bold text-white tracking-tight text-orange-500">¡Ve al mostrador!</h3>
+                        <p className="text-sm text-text-dim">Te estamos esperando para entregarte tu pedido.</p>
+                     </>
+                   ) : activeOrderStatus === 'ready' ? (
+                     <>
+                        <motion.div 
+                           initial={{ scale: 0.8 }}
+                           animate={{ scale: [0.8, 1.2, 1] }} 
+                           transition={{ duration: 0.5, type: 'spring' }}
+                        >
+                           <UtensilsCrossed size={80} className="text-accent mb-4 mx-auto drop-shadow-[0_0_15px_rgba(255,204,0,0.5)]" />
+                        </motion.div>
+                        <h3 className="text-3xl font-black text-accent tracking-tighter">¡PEDIDO LISTO<br/>PARA RETIRAR!</h3>
+                        <p className="text-base text-gray-300 font-medium w-full">Acércate al mostrador indicando el nombre:<br/><span className="text-white font-black text-xl bg-[#222] px-4 py-2 rounded-xl inline-block mt-3 border border-border-dark w-full">{customerName}</span></p>
+                        
+                        <button 
+                          onClick={handleOnTheWay}
+                          className="mt-6 w-full py-4 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-xl shadow-orange-500/20 transition-all uppercase tracking-widest text-xs"
+                        >
+                          Estoy en camino a retirar
+                        </button>
+                     </>
+                   ) : activeOrderStatus === 'preparing' ? (
+                     <>
+                        <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 8, ease: 'linear' }}>
+                           <UtensilsCrossed size={64} className="text-blue-400 mb-2 mx-auto" />
+                        </motion.div>
+                        <h3 className="text-2xl font-bold text-white tracking-tight">Preparando tu pedido</h3>
+                        <p className="text-sm text-text-dim">¡El comercio ya está trabajando en lo tuyo!</p>
+                     </>
+                   ) : (
+                     <>
+                        <Clock size={64} className="text-yellow-500 mb-2 mx-auto animate-pulse" />
+                        <h3 className="text-2xl font-bold text-white tracking-tight">Pedido Enviado</h3>
+                        <p className="text-sm text-text-dim">Esperando que el comercio comience a prepararlo.</p>
+                     </>
+                   )}
+                  </div>
+                ) : cart.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center gap-6 text-text-dim">
                     <div className="w-20 h-20 rounded-full bg-card-dark flex items-center justify-center">
                       <ShoppingBag size={40} strokeWidth={1} />
@@ -475,11 +680,36 @@ export default function ClientApp() {
                 {checkoutStep === 'cart' ? (
                   <button 
                     disabled={cart.length === 0}
-                    onClick={() => setCheckoutStep('payment')}
+                    onClick={() => setCheckoutStep('details')}
                     className="w-full bg-accent text-black py-5 rounded-2xl font-black text-lg tracking-widest uppercase shadow-xl shadow-accent/20 active:scale-[0.98] transition-transform"
                   >
-                    FINALIZAR PEDIDO
+                    CONTINUAR
                   </button>
+                ) : checkoutStep === 'details' ? (
+                  <div className="flex flex-col gap-3">
+                    <input
+                     type="text"
+                     value={customerName}
+                     onChange={(e) => setCustomerName(e.target.value)}
+                     placeholder="Tu Nombre / Apellido"
+                     className="w-full bg-[#222] border border-border-dark text-white p-4 rounded-xl focus:border-accent focus:outline-none font-bold mb-2"
+                    />
+                    <button 
+                      onClick={() => {
+                        if(!customerName.trim()){ alert("Ingresa tu nombre."); return; }
+                        setCheckoutStep('payment');
+                      }}
+                      className="w-full bg-accent text-black py-4 rounded-xl font-bold uppercase"
+                    >
+                      Siguiente
+                    </button>
+                    <button 
+                      onClick={() => setCheckoutStep('cart')}
+                      className="w-full text-text-dim py-2 font-medium"
+                    >
+                      Volver
+                    </button>
+                  </div>
                 ) : checkoutStep === 'payment' && !isProcessing ? (
                   <div className="flex flex-col gap-3">
                     <button 
@@ -495,16 +725,24 @@ export default function ClientApp() {
                       Pagar con Tarjeta
                     </button>
                     <button 
-                      onClick={() => setCheckoutStep('cart')}
+                      onClick={() => setCheckoutStep('details')}
                       className="w-full text-text-dim py-2 font-medium"
                     >
                       Volver
                     </button>
                   </div>
-                ) : checkoutStep === 'success' ? (
-                  <div className="w-full py-5 text-center text-accent font-bold">
-                    ¡Pedido Exitoso!
-                  </div>
+                ) : checkoutStep === 'tracking' && activeOrderStatus === 'delivered' ? (
+                  <button 
+                    onClick={() => {
+                      setCart([]);
+                      setCheckoutStep('cart');
+                      setCustomerName('');
+                      setActiveOrderId(null);
+                    }}
+                    className="w-full bg-white text-black py-5 rounded-2xl font-black text-lg uppercase"
+                  >
+                    NUEVO PEDIDO
+                  </button>
                 ) : (
                   <div className="w-full py-5 text-center text-accent font-bold animate-pulse">
                     Procesando...
