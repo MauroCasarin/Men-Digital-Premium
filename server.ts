@@ -33,26 +33,25 @@ async function startServer() {
               content: [
                 { 
                   type: "text", 
-                  text: `Analiza este comprobante de pago. 
-DATOS DE VERIFICACIÓN (ESTRICTO):
-1. Monto exacto: $${expectedTotal}
-2. Fecha actual: ${expectedDate}
-3. Hora aproximada: ${expectedTime} (+/- 30 min)
-4. Cuenta destino: ${businessAlias}
+                  text: `Analiza este comprobante de pago de transferencia o billetera virtual. 
+DATOS PARA COMPARAR (MUY ESTRICTO):
+1. Monto a pagar: $${expectedTotal}
+2. Fecha requerida: ${expectedDate}
+3. Hora de hoy: ${expectedTime} (El comprobante debe ser de hace minutos).
+4. Cuenta destino para verificar: ${businessAlias}
 
 TAREAS:
-- Identifica el monto transferido.
-- Identifica la fecha y hora de la operación en el comprobante.
-- Identifica si el estado es "Exitoso", "Aprobado", "Transferencia enviada", etc.
-- Verifica que NO sea un comprobante viejo (de otro día u otra hora lejana).
-- Verifica que el destinatario coincida con el negocio (si el dato es visible).
+- Extrae el monto de la transferencia.
+- Extrae la fecha y hora.
+- Verifica que el estado sea exitoso.
+- Si el destino es visible, verifica que sea para "${businessAlias}".
 
-Devuelve tu respuesta ÚNICA Y ESTRICTAMENTE en este formato JSON:
+Responde ÚNICAMENTE un JSON:
 {
   "valid": true o false,
   "detected_amount": numero,
-  "detected_datetime": "fecha y hora que viste",
-  "reason": "explicación detallada de por qué es válido o por qué se rechazó (monto incorrecto, fecha vieja, imagen ilegible, etc)"
+  "detected_datetime": "fecha y hora",
+  "reason": "Motivo breve"
 }` 
                 },
                 { 
@@ -69,15 +68,26 @@ Devuelve tu respuesta ÚNICA Y ESTRICTAMENTE en este formato JSON:
         })
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         console.error("Groq API Error:", data);
-        return res.status(500).json({ error: data.error?.message || "Error al comunicarse con la IA." });
+        return res.status(500).json({ error: "La IA de verificación está ocupada o falló. Intenta de nuevo en unos segundos." });
       }
 
       const content = data.choices?.[0]?.message?.content;
-      res.json(JSON.parse(content));
+      
+      if (!content) {
+        return res.status(500).json({ error: "La IA no devolvió una respuesta válida." });
+      }
+
+      try {
+        const parsed = JSON.parse(content);
+        res.json(parsed);
+      } catch (e) {
+        console.error("Failed to parse vision response:", content);
+        res.status(500).json({ error: "La respuesta de la IA no fue en formato válido. Intenta subir una foto más clara." });
+      }
     } catch (error: any) {
       console.error("Verify receipt error:", error);
       res.status(500).json({ error: error.message || "Error interno del servidor" });

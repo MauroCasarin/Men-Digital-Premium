@@ -262,15 +262,44 @@ export default function ClientApp() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert("La imagen es demasiado pesada. Máximo 10MB, por favor.");
+      if (file.size > 15 * 1024 * 1024) {
+        alert("La imagen es excesivamente grande. Intenta con una captura de pantalla.");
         return;
       }
-      
+
+      setIsVerifying(true);
       const reader = new FileReader();
-      reader.onload = () => {
-        setReceiptImage(reader.result as string);
-        setVerdict(null); // reset prior verdicts
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1200;
+
+          if (width > height) {
+            if (width > maxDim) {
+              height *= maxDim / width;
+              width = maxDim;
+            }
+          } else {
+            if (height > maxDim) {
+              width *= maxDim / height;
+              height = maxDim;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
+          setReceiptImage(compressedBase64);
+          setVerdict(null);
+          setIsVerifying(false);
+        };
+        img.src = event.target?.result as string;
       };
       reader.readAsDataURL(file);
     }
@@ -288,13 +317,20 @@ export default function ClientApp() {
         body: JSON.stringify({
           imageBase64: receiptImage,
           expectedTotal: total,
-          expectedDate: now.toLocaleDateString(),
-          expectedTime: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          expectedDate: now.toLocaleDateString('es-AR'),
+          expectedTime: now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
           businessAlias: businessSettings.alias
         })
       });
 
-      const data = await response.json();
+      let data;
+      const text = await response.text();
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error("Server raw response:", text);
+        throw new Error("El sistema de verificación no respondió correctamente. Esto suele pasar si la imagen no se subió bien o el servidor tardó demasiado.");
+      }
       
       if (!response.ok) {
         throw new Error(data.error || "Error verificando comprobante");
@@ -306,7 +342,6 @@ export default function ClientApp() {
       });
 
       if (data.valid) {
-         // Auto-checkout with verified payment
          await handleCheckout('Transferencia / Pago Online - VERIFICADO ✅');
       }
     } catch (err: any) {
