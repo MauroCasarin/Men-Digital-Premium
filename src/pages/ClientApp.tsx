@@ -603,7 +603,7 @@ export default function ClientApp() {
             )}
           </div>
 
-          <div className="flex-1 overflow-auto space-y-6 pr-2 scrollbar-thin scrollbar-thumb-accent/20">
+          <div className="flex-1 overflow-auto relative space-y-6 pr-2 scrollbar-thin scrollbar-thumb-accent/20">
             <AnimatePresence mode="popLayout" initial={false}>
               {checkoutStep === 'tracking' ? (
                  <motion.div 
@@ -987,7 +987,7 @@ export default function ClientApp() {
                 </button>
               </div>
               
-              <div className="flex-1 overflow-auto p-6 space-y-6 scrollbar-hide">
+              <div className="flex-1 overflow-auto relative p-6 space-y-6 scrollbar-hide">
                 <AnimatePresence mode="popLayout" initial={false}>
                   {checkoutStep === 'tracking' ? (
                     <motion.div 
@@ -1021,6 +1021,14 @@ export default function ClientApp() {
                            >
                              Estoy en camino a retirar
                            </button>
+                        </>
+                      ) : activeOrderStatus === 'preparing' ? (
+                        <>
+                           <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 8, ease: 'linear' }}>
+                              <UtensilsCrossed size={64} className="text-blue-400 mb-2 mx-auto" />
+                           </motion.div>
+                           <h3 className="text-2xl font-bold text-white tracking-tight">Preparando pedido</h3>
+                           <p className="text-sm text-text-dim">¡El comercio ya está trabajando en lo tuyo!</p>
                         </>
                       ) : (
                         <>
@@ -1202,12 +1210,14 @@ export default function ClientApp() {
                         </div>
                       )}
                       
-                      <button 
-                        onClick={() => setCheckoutStep('details')}
-                        className="w-full text-text-dim py-2 font-bold text-xs uppercase opacity-60"
-                      >
-                        Volver
-                      </button>
+                      {checkoutStep === 'payment' && !isProcessing && (
+                        <button 
+                          onClick={() => setCheckoutStep('details')}
+                          className="w-full text-text-dim py-2 font-bold text-xs uppercase opacity-60"
+                        >
+                          Volver
+                        </button>
+                      )}
                     </motion.div>
                   ) : cart.length === 0 ? (
                     <motion.div 
