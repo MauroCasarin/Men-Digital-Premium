@@ -1,0 +1,195 @@
+import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { UtensilsCrossed, Clock, CheckCircle, Package } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { Order } from '../types';
+
+export default function CommerceApp() {
+  const [orders, setOrders] = useState<Order[]>([]);
+
+  useEffect(() => {
+    // 1. Fetch existing orders
+    const fetchOrders = async () => {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (!error && data) {
+        setOrders(data as Order[]);
+      }
+    };
+
+    fetchOrders();
+
+    // 2. Subscribe to new orders
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'orders',
+        },
+        (payload) => {
+          console.log("New order received!", payload.new);
+          setOrders((current) => [payload.new as Order, ...current]);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders',
+        },
+        (payload) => {
+          setOrders((current) => 
+            current.map(o => o.id === payload.new.id ? (payload.new as Order) : o)
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const updateOrderStatus = async (id: string, newStatus: string) => {
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: newStatus })
+      .eq('id', id);
+
+    if (error) {
+      console.error("Error updating status", error);
+      alert("Error al actualizar la orden.");
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50';
+      case 'preparing': return 'bg-blue-500/20 text-blue-500 border-blue-500/50';
+      case 'ready': return 'bg-accent/20 text-accent border-accent/50';
+      case 'delivered': return 'bg-green-500/20 text-green-500 border-green-500/50';
+      default: return 'bg-gray-500/20 text-gray-500 border-gray-500/50';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pending': return 'Pendiente';
+      case 'preparing': return 'Preparando';
+      case 'ready': return 'Listo';
+      case 'delivered': return 'Entregado';
+      default: return status;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-bg-dark text-white p-6 md:p-10 font-sans">
+      <header className="bento-card mb-8 p-6 flex justify-between items-center bg-card-dark border-border-dark">
+        <h1 className="text-2xl md:text-3xl font-extrabold flex items-center gap-3">
+          <UtensilsCrossed className="text-accent" size={32} />
+          Panel de <span className="text-accent">Comercio</span>
+        </h1>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
+          <span className="text-sm font-bold text-gray-400">Escuchando pedidos</span>
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <AnimatePresence>
+          {orders.map((order) => (
+            <motion.div
+              key={order.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bento-card flex flex-col bg-card-dark p-6 border border-border-dark"
+            >
+              <div className="flex justify-between items-start mb-6 pb-4 border-b border-border-dark">
+                <div>
+                  <h2 className="text-lg font-bold">Orden #{order.id.split('-')[0].toUpperCase()}</h2>
+                  <p className="text-xs text-text-dim mt-1">
+                    {new Date(order.created_at).toLocaleString()}
+                  </p>
+                </div>
+                <div className={`px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(order.status)}`}>
+                  {getStatusLabel(order.status)}
+                </div>
+              </div>
+
+              <div className="flex-1 space-y-3 mb-6">
+                <h3 className="text-sm font-bold text-accent mb-2">Detalle:</h3>
+                {order.items.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-start text-sm">
+                    <div className="flex items-start gap-2">
+                      <span className="font-black text-gray-400">{item.quantity}x</span>
+                      <div>
+                        <span className="font-medium text-white">{item.product.name}</span>
+                        {item.instructions && (
+                          <p className="text-xs text-yellow-500/80 italic mt-0.5">Nota: {item.instructions}</p>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-gray-400">${(item.product.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-auto pt-4 border-t border-border-dark">
+                <div className="flex justify-between items-center mb-4">
+                  <span className="font-bold text-gray-400">Total</span>
+                  <span className="text-xl font-bold text-accent">${order.total.toFixed(2)}</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                   {order.status === 'pending' && (
+                     <button
+                       onClick={() => updateOrderStatus(order.id, 'preparing')}
+                       className="col-span-2 w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+                     >
+                       <Package size={18} /> Preparar Orden
+                     </button>
+                   )}
+                   {order.status === 'preparing' && (
+                     <button
+                       onClick={() => updateOrderStatus(order.id, 'ready')}
+                       className="col-span-2 w-full py-3 bg-accent hover:bg-yellow-400 text-black font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+                     >
+                       <CheckCircle size={18} /> Marcar Lista
+                     </button>
+                   )}
+                   {order.status === 'ready' && (
+                     <button
+                       onClick={() => updateOrderStatus(order.id, 'delivered')}
+                       className="col-span-2 w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+                     >
+                       <UtensilsCrossed size={18} /> Entregada
+                     </button>
+                   )}
+                   {order.status === 'delivered' && (
+                     <div className="col-span-2 text-center py-2 text-sm text-gray-500 font-bold">
+                       Orden Completada
+                     </div>
+                   )}
+                </div>
+              </div>
+            </motion.div>
+          ))}
+          {orders.length === 0 && (
+             <div className="col-span-full py-20 flex flex-col items-center justify-center text-gray-500 gap-4">
+               <Clock size={48} className="opacity-20" />
+               <p className="text-lg font-bold">No hay pedidos activos todavía.</p>
+             </div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}

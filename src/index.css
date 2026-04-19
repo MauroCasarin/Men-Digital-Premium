@@ -1,0 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-accent: #FFCC00;
+  --color-bg-dark: #0A0A0A;
+  --color-card-dark: #141414;
+  --color-border-dark: #262626;
+  --color-text-dim: #888888;
+}
+
+@layer base {
+  body {
+    @apply bg-bg-dark text-gray-100 font-sans antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-bg-dark;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-card-dark rounded-full border border-border-dark;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-accent/20;
+  }
+}
+
+@layer components {
+  .bento-card {
+    @apply bg-card-dark border border-border-dark rounded-[20px] p-5 relative flex flex-col transition-all;
+  }
+}
+
