@@ -102,9 +102,19 @@ export default function CommerceApp() {
   }, []);
 
   const updateOrderStatus = async (id: string, newStatus: string) => {
+    let updatePayload: any = { status: newStatus };
+    
+    // If the commerce puts it as "completed" (Retirado), liberate the name formally
+    if (newStatus === 'completed') {
+      const orderToUpdate = orders.find(o => o.id === id);
+      if (orderToUpdate && orderToUpdate.customer_name) {
+        updatePayload.customer_name = `${orderToUpdate.customer_name} (Retirado)`;
+      }
+    }
+
     const { error } = await supabase
       .from('orders')
-      .update({ status: newStatus })
+      .update(updatePayload)
       .eq('id', id);
 
     if (error) {
@@ -160,7 +170,7 @@ export default function CommerceApp() {
     try {
       const { error } = await supabase.from('menu_items').upsert(menuItems);
       if (error) {
-        if (error.code === '42P01') {
+        if (error.code === '42P01' || error.message.includes('Could not find the table')) {
           setDbErrorSql(`CREATE TABLE IF NOT EXISTS menu_items (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -177,9 +187,29 @@ export default function CommerceApp() {
       setDbErrorSql(null);
     } catch (e: any) {
       console.error(e);
-      alert("Error al guardar. " + e.message);
+      if (e.code === '42P01' || (e.message && e.message.includes('Could not find the table'))) {
+         alert("Tabla de Menú no encontrada. ¡Por favor copia el bloque de código SQL de color rojo que apareció y ejecútalo en Supabase!");
+      } else {
+         alert("Error al guardar. " + e.message);
+      }
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const clearHistory = async () => {
+    if (!window.confirm("¿Seguro que deseas eliminar el historial antiguo?")) return;
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('status', 'completed');
+      
+      if (error) throw error;
+      alert("Historial limpiado correctamente");
+    } catch (err: any) {
+      console.error(err);
+      alert("No se pudo limpiar el historial: " + err.message);
     }
   };
 
@@ -391,8 +421,16 @@ export default function CommerceApp() {
 
       {pastOrders.length > 0 && (
         <div className="mt-12">
-          <h2 className="text-xl font-bold mb-6 text-gray-400 flex items-center gap-2">Historial de Turno</h2>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+            <h2 className="text-xl font-bold text-gray-400 flex items-center gap-2">Historial de Turno</h2>
+            <button 
+              onClick={clearHistory}
+              className="flex items-center gap-2 text-red-500 hover:text-red-400 hover:bg-red-500/10 px-4 py-2 rounded-xl text-sm font-bold transition-colors"
+            >
+              <Trash2 size={16} /> Eliminar historial antiguo
+            </button>
+          </div>
+          <div className="flex flex-col gap-2">
             {pastOrders.map(order => {
               const isExpanded = expandedOrders.has(order.id);
               return (
@@ -400,22 +438,22 @@ export default function CommerceApp() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   key={order.id} 
-                  className={`bento-card border transition-colors overflow-hidden ${order.status === 'completed' ? 'bg-[#111] border-border-dark opacity-50' : 'bg-card-dark/40 border-green-500/20 hover:bg-card-dark/60 cursor-pointer'}`}
+                  className={`bento-card border transition-colors overflow-hidden ${order.status === 'completed' ? 'bg-[#111] border-border-dark opacity-60 hover:opacity-100' : 'bg-card-dark/40 border-green-500/20 hover:bg-card-dark/60 cursor-pointer'}`}
                   onClick={() => toggleExpand(order.id)}
                 >
-                  <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <span className="font-bold text-sm text-gray-500">#{order.id.split('-')[0].toUpperCase()}</span>
+                  <div className="p-3 sm:px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-xs text-gray-500">#{order.id.split('-')[0].toUpperCase()}</span>
                       {order.customer_name && (
-                         <span className="font-black text-white text-lg tracking-tight">{order.customer_name}</span>
+                         <span className="font-black text-white text-base tracking-tight">{order.customer_name.replace(' (Retirado)', '')}</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
                       <span className="font-bold text-accent">${order.total.toFixed(2)}</span>
-                      <span className={`text-xs font-bold px-2 py-1 rounded border ${getStatusColor(order.status)}`}>
+                      <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded border ${getStatusColor(order.status)}`}>
                         {getStatusLabel(order.status)}
                       </span>
-                      {isExpanded ? <ChevronUp size={20} className="text-text-dim" /> : <ChevronDown size={20} className="text-text-dim" />}
+                      {isExpanded ? <ChevronUp size={16} className="text-text-dim" /> : <ChevronDown size={16} className="text-text-dim" />}
                     </div>
                   </div>
 
