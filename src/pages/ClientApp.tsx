@@ -16,9 +16,10 @@ import {
   Clock,
   ChevronRight,
   CheckCircle,
-  UtensilsCrossed
+  UtensilsCrossed,
+  History
 } from 'lucide-react';
-import { Product, CartItem } from '../types';
+import { Product, CartItem, Order } from '../types';
 import { PRODUCTS, WHATSAPP_PHONE } from '../constants';
 import { supabase } from '../lib/supabase';
 
@@ -31,6 +32,35 @@ export default function ClientApp() {
   const [customerName, setCustomerName] = useState(() => localStorage.getItem('studioMenu_customerName') || '');
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [activeOrderStatus, setActiveOrderStatus] = useState<string>('');
+  const [toastNotification, setToastNotification] = useState<{title: string, body: string, status: string} | null>(null);
+  
+  const [showHistory, setShowHistory] = useState(false);
+  const [pastOrders, setPastOrders] = useState<Order[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  const fetchHistory = async () => {
+    if (!customerName.trim()) {
+      alert('Debes realizar un pedido al menos una vez para ver tu historial.');
+      return;
+    }
+    setIsLoadingHistory(true);
+    setShowHistory(true);
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .ilike('customer_name', customerName.trim())
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
+      setPastOrders((data as Order[]) || []);
+    } catch (e) {
+      console.error(e);
+      alert('Error cargando el historial.');
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
 
   const playNotificationSound = () => {
     try {
@@ -59,6 +89,53 @@ export default function ClientApp() {
   useEffect(() => {
     let alertInterval: NodeJS.Timeout;
     
+    // Configurar notificaciones visuales/toast basadas en el cambio de estado
+    if (activeOrderStatus && activeOrderStatus !== 'pending') {
+      let title = '';
+      let body = '';
+      
+      switch(activeOrderStatus) {
+        case 'preparing':
+          title = '👨‍🍳 Preparando';
+          body = 'El comercio ha empezado a preparar tu orden.';
+          break;
+        case 'ready':
+          title = '✅ ¡Listo para retirar!';
+          body = 'Acércate al mostrador para entregarte tu orden.';
+          break;
+        case 'on_the_way':
+          title = '🚶‍♂️ Te vemos en camino';
+          body = '¡Ya sacamos tu pedido al mostrador!';
+          break;
+        case 'delivered':
+          title = '🛍️ Pedido Entregado';
+          body = '¡Esperamos que lo disfrutes!';
+          break;
+        case 'completed':
+           title = '👋 Pedido Finalizado';
+           body = 'Gracias por tu compra.';
+           break;
+      }
+      
+      if (title) {
+        setToastNotification({ title, body, status: activeOrderStatus });
+        
+        // Native browser notification if permitted
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(`Tu Pedido: ${title}`, { body });
+        }
+        
+        const removeTimer = setTimeout(() => {
+          setToastNotification(null);
+        }, 5000); // 5 segundos de popup visual
+        
+        // Cleanup para el timeout del toast
+        if (activeOrderStatus !== 'ready') {
+          return () => clearTimeout(removeTimer);
+        }
+      }
+    }
+    
     if (activeOrderStatus === 'ready') {
       // Tocar y vibrar inmediatamente al cambiar a ready
       playNotificationSound();
@@ -75,6 +152,24 @@ export default function ClientApp() {
       if (alertInterval) clearInterval(alertInterval);
     };
   }, [activeOrderStatus]);
+
+  // Restoring order listener when mounting if actively shopping in tracking view but lost WS
+  useEffect(() => {
+    if (activeOrderId && checkoutStep === 'tracking') {
+      const channel = supabase
+        .channel(`public:orders:id=eq.${activeOrderId}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${activeOrderId}` },
+          (payload) => {
+            setActiveOrderStatus(payload.new.status);
+          }
+        )
+        .subscribe();
+        
+      return () => { supabase.removeChannel(channel); }
+    }
+  }, [activeOrderId, checkoutStep]);
 
   const categories = ['Menú', 'Bebidas'];
 
@@ -181,6 +276,11 @@ export default function ClientApp() {
           }
         )
         .subscribe();
+        
+      // Pedir permisos de notificación de escritorio/movil si no se pidieron antes
+      if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        Notification.requestPermission();
+      }
       
     } catch (error) {
       console.error(error);
@@ -198,6 +298,33 @@ export default function ClientApp() {
 
   return (
     <div className="min-h-screen bg-bg-dark p-4 md:p-10 flex flex-col items-center overflow-x-hidden">
+      
+      {/* Toast Notification Container */}
+      <AnimatePresence>
+        {toastNotification && (
+          <motion.div 
+            initial={{ opacity: 0, y: -50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-sm rounded-2xl shadow-2xl p-4 flex items-start gap-4 border ring-4 border-border-dark bg-[#111]
+              ${toastNotification.status === 'ready' ? 'ring-accent/40 shadow-accent/20' : 
+                toastNotification.status === 'delivered' ? 'ring-green-500/40 shadow-green-500/20' : 
+                'ring-transparent'}`}
+          >
+            <div className="flex-1">
+              <h4 className="font-bold text-white text-lg leading-tight mb-1">{toastNotification.title}</h4>
+              <p className="text-sm text-gray-400 leading-snug">{toastNotification.body}</p>
+            </div>
+            <button 
+              onClick={() => setToastNotification(null)}
+              className="text-gray-500 hover:text-white transition-colors"
+            >
+              <X size={20} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="w-full max-w-[1400px] flex flex-col md:grid md:grid-cols-[1fr_1fr_360px] md:grid-rows-[auto_1fr_1fr_auto] gap-5">
         
         {/* Header Bento Item */}
@@ -222,18 +349,35 @@ export default function ClientApp() {
                 {cat}
               </motion.button>
             ))}
+            <motion.button
+              whileHover={{ y: -3 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={fetchHistory}
+              className="px-4 py-2 rounded-full text-[13px] font-semibold transition-all bg-[#222] text-white hover:bg-[#333] flex items-center gap-2"
+            >
+              <History size={16} /> Mis Pedidos
+            </motion.button>
           </div>
-          <button 
-            onClick={() => setShowCartMobile(true)}
-            className="md:hidden relative p-3 bg-accent rounded-xl text-black hover:scale-105 transition-transform"
-          >
-            <ShoppingBag size={20} />
-            {cart.length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-white text-black text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border border-black shadow-lg">
-                {cart.reduce((a, b) => a + b.quantity, 0)}
-              </span>
-            )}
-          </button>
+          
+          <div className="md:hidden flex items-center gap-2">
+            <button 
+              onClick={fetchHistory}
+              className="p-3 bg-[#222] rounded-xl text-white hover:scale-105 transition-transform"
+            >
+              <History size={20} />
+            </button>
+            <button 
+              onClick={() => setShowCartMobile(true)}
+              className="relative p-3 bg-accent rounded-xl text-black hover:scale-105 transition-transform"
+            >
+              <ShoppingBag size={20} />
+              {cart.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-white text-black text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border border-black shadow-lg">
+                  {cart.reduce((a, b) => a + b.quantity, 0)}
+                </span>
+              )}
+            </button>
+          </div>
         </header>
 
         {/* Categories Mobile (shown only on mobile) */}
@@ -782,6 +926,83 @@ export default function ClientApp() {
           </button>
         </motion.div>
       )}
+
+      {/* History Modal Overlay */}
+      <AnimatePresence>
+        {showHistory && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-10">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setShowHistory(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-2xl bg-card-dark border border-border-dark shadow-2xl rounded-3xl overflow-hidden flex flex-col max-h-[85vh]"
+            >
+              <div className="p-6 border-b border-border-dark flex items-center justify-between bg-[#111]">
+                <h2 className="text-2xl font-black tracking-tight flex items-center gap-3 text-white">
+                  <History size={28} className="text-accent" />
+                  MIS PEDIDOS
+                </h2>
+                <button onClick={() => setShowHistory(false)} className="p-2 text-text-dim hover:text-white bg-[#222] rounded-full transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-auto p-6 scrollbar-thin scrollbar-thumb-accent/20">
+                {isLoadingHistory ? (
+                  <div className="h-40 flex flex-col items-center justify-center gap-4">
+                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
+                      <Clock size={32} className="text-accent" />
+                    </motion.div>
+                    <p className="text-text-dim font-bold animate-pulse">Cargando tu historial...</p>
+                  </div>
+                ) : pastOrders.length === 0 ? (
+                  <div className="h-40 flex flex-col items-center justify-center gap-4 text-text-dim text-center">
+                    <History size={48} className="opacity-20" />
+                    <p className="font-medium text-lg">Aún no tienes pedidos registrados<br/>con el nombre "{customerName}".</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {pastOrders.map(order => (
+                      <div key={order.id} className="bg-[#1a1a1a] border border-border-dark p-5 rounded-2xl">
+                        <div className="flex justify-between items-start mb-4 pb-4 border-b border-white/5">
+                          <div>
+                            <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                              {new Date(order.created_at).toLocaleDateString()} - {new Date(order.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            </span>
+                            <h4 className="text-lg font-bold text-white mt-1">Orden #{order.id.split('-')[0].toUpperCase()}</h4>
+                          </div>
+                          <div className="text-right">
+                            <span className="block text-xl font-black text-accent">${order.total.toFixed(2)}</span>
+                            <span className={`inline-block mt-1 text-[10px] uppercase font-bold px-2 py-0.5 rounded border 
+                              ${order.status === 'completed' ? 'bg-[#222] text-gray-400 border-gray-700' : 'bg-green-500/20 text-green-500 border-green-500/50'}`}>
+                              {order.status === 'completed' ? 'RETIRADO' : order.status === 'delivered' ? 'ENTREGADO' : 'EN CURSO'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          {order.items.map((item, idx) => (
+                            <div key={idx} className="flex justify-between text-sm items-start gap-4">
+                              <span className="text-gray-300">
+                                <span className="font-bold text-white">{item.quantity}x</span> {item.product.name}
+                              </span>
+                              <span className="text-gray-500 whitespace-nowrap">${(item.product.price * item.quantity).toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
