@@ -1,11 +1,22 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { UtensilsCrossed, Clock, CheckCircle, Package } from 'lucide-react';
+import { UtensilsCrossed, Clock, CheckCircle, Package, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Order } from '../types';
 
 export default function CommerceApp() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (id: string, e?: any) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    setExpandedOrders(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   useEffect(() => {
     // 1. Fetch existing orders
@@ -75,7 +86,8 @@ export default function CommerceApp() {
       case 'preparing': return 'bg-blue-500/20 text-blue-500 border-blue-500/50';
       case 'ready': return 'bg-accent/20 text-accent border-accent/50';
       case 'on_the_way': return 'bg-orange-500/20 text-orange-400 border-orange-500/50 animate-pulse ring-2 ring-orange-500';
-      case 'delivered': return 'bg-green-500/20 text-green-500 border-green-500/50 opacity-60';
+      case 'delivered': return 'bg-green-500/20 text-green-500 border-green-500/50';
+      case 'completed': return 'bg-[#222] text-gray-500 border-border-dark';
       default: return 'bg-gray-500/20 text-gray-500 border-gray-500/50';
     }
   };
@@ -87,9 +99,13 @@ export default function CommerceApp() {
       case 'ready': return 'Listo';
       case 'on_the_way': return '¡En camino a retirar!';
       case 'delivered': return 'Entregado';
+      case 'completed': return 'Retirado';
       default: return status;
     }
   };
+
+  const activeOrders = orders.filter(o => !['delivered', 'completed'].includes(o.status));
+  const pastOrders = orders.filter(o => ['delivered', 'completed'].includes(o.status));
 
   return (
     <div className="min-h-screen bg-bg-dark text-white p-6 md:p-10 font-sans">
@@ -106,28 +122,7 @@ export default function CommerceApp() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         <AnimatePresence>
-          {orders.map((order) => {
-            if (order.status === 'delivered') {
-              return (
-                <motion.div
-                  key={order.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  className="bento-card flex items-center justify-between bg-card-dark/30 p-4 border border-green-500/20 opacity-60"
-                >
-                  <div>
-                    <span className="font-bold text-sm text-gray-400">Orden #{order.id.split('-')[0].toUpperCase()}</span>
-                    {order.customer_name && <span className="ml-2 text-xs text-yellow-500/80">{order.customer_name}</span>}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-bold text-sm text-gray-400">${order.total.toFixed(2)}</span>
-                    <span className="text-xs font-bold px-2 py-1 bg-green-500/10 text-green-500 rounded">Entregado</span>
-                  </div>
-                </motion.div>
-              );
-            }
-
+          {activeOrders.map((order) => {
             return (
               <motion.div
                 key={order.id}
@@ -212,7 +207,7 @@ export default function CommerceApp() {
               </motion.div>
             );
           })}
-          {orders.length === 0 && (
+          {activeOrders.length === 0 && (
              <div className="col-span-full py-20 flex flex-col items-center justify-center text-gray-500 gap-4">
                <Clock size={48} className="opacity-20" />
                <p className="text-lg font-bold">No hay pedidos activos todavía.</p>
@@ -220,6 +215,75 @@ export default function CommerceApp() {
           )}
         </AnimatePresence>
       </div>
+
+      {pastOrders.length > 0 && (
+        <div className="mt-12">
+          <h2 className="text-xl font-bold mb-6 text-gray-400 flex items-center gap-2">Historial de Turno</h2>
+          <div className="flex flex-col gap-3">
+            {pastOrders.map(order => {
+              const isExpanded = expandedOrders.has(order.id);
+              return (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  key={order.id} 
+                  className={`bento-card border transition-colors overflow-hidden ${order.status === 'completed' ? 'bg-[#111] border-border-dark opacity-50' : 'bg-card-dark/40 border-green-500/20 hover:bg-card-dark/60 cursor-pointer'}`}
+                  onClick={() => toggleExpand(order.id)}
+                >
+                  <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <span className="font-bold text-sm text-gray-500">#{order.id.split('-')[0].toUpperCase()}</span>
+                      {order.customer_name && (
+                         <span className="font-black text-white text-lg tracking-tight">{order.customer_name}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="font-bold text-accent">${order.total.toFixed(2)}</span>
+                      <span className={`text-xs font-bold px-2 py-1 rounded border ${getStatusColor(order.status)}`}>
+                        {getStatusLabel(order.status)}
+                      </span>
+                      {isExpanded ? <ChevronUp size={20} className="text-text-dim" /> : <ChevronDown size={20} className="text-text-dim" />}
+                    </div>
+                  </div>
+
+                  <AnimatePresence>
+                    {isExpanded && (
+                      <motion.div 
+                        initial={{ height: 0, opacity: 0 }} 
+                        animate={{ height: 'auto', opacity: 1 }} 
+                        exit={{ height: 0, opacity: 0 }}
+                      >
+                        <div className="px-4 pb-4 pt-2 border-t border-border-dark mt-2" onClick={e => e.stopPropagation()}>
+                          <div className="space-y-2 mb-4">
+                            {order.items.map((item, idx) => (
+                              <div key={idx} className="flex justify-between text-sm">
+                                <span className="text-gray-400"><span className="text-white font-bold">{item.quantity}x</span> {item.product.name}</span>
+                                <span className="text-gray-500">${(item.product.price * item.quantity).toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                          
+                          {order.status === 'delivered' && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                updateOrderStatus(order.id, 'completed');
+                              }}
+                              className="w-full py-3 bg-[#222] hover:bg-white hover:text-black font-bold uppercase tracking-widest text-xs rounded-xl shadow transition-colors border border-border-dark"
+                            >
+                              El Cliente Se Retiró (Liberar Nombre)
+                            </button>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="mt-12 p-6 bento-card bg-[#111] border-t-4 border-accent flex justify-between items-center shadow-2xl">
         <div>

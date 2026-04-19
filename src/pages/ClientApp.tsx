@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShoppingBag, 
@@ -28,9 +28,53 @@ export default function ClientApp() {
   const [showCartMobile, setShowCartMobile] = useState(false);
   const [activeCategory, setActiveCategory] = useState('Menú');
   const [checkoutStep, setCheckoutStep] = useState<'cart' | 'details' | 'payment' | 'tracking'>('cart');
-  const [customerName, setCustomerName] = useState('');
+  const [customerName, setCustomerName] = useState(() => localStorage.getItem('studioMenu_customerName') || '');
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [activeOrderStatus, setActiveOrderStatus] = useState<string>('');
+
+  const playNotificationSound = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      const playBeep = (freq: number, startTime: number) => {
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.type = 'square'; // Agudo y penetrante
+        oscillator.frequency.setValueAtTime(freq, startTime);
+        gainNode.gain.setValueAtTime(0.3, startTime);
+        oscillator.start(startTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.3);
+        oscillator.stop(startTime + 0.3);
+      };
+      
+      const t = audioCtx.currentTime;
+      playBeep(1200, t);
+      playBeep(1500, t + 0.15);
+      playBeep(1800, t + 0.3);
+    } catch(e) {}
+  };
+
+  useEffect(() => {
+    let alertInterval: NodeJS.Timeout;
+    
+    if (activeOrderStatus === 'ready') {
+      // Tocar y vibrar inmediatamente al cambiar a ready
+      playNotificationSound();
+      if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]);
+      
+      // Configurar loop cada 3 segundos hasta que cambie el estado
+      alertInterval = setInterval(() => {
+        playNotificationSound();
+        if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]);
+      }, 3000);
+    }
+
+    return () => {
+      if (alertInterval) clearInterval(alertInterval);
+    };
+  }, [activeOrderStatus]);
 
   const categories = ['Menú', 'Bebidas'];
 
@@ -94,7 +138,7 @@ export default function ClientApp() {
         .from('orders')
         .select('*')
         .ilike('customer_name', customerName.trim()) // Use ilike for case-insensitive match
-        .neq('status', 'delivered');
+        .neq('status', 'completed');
         
       if (fetchError) throw fetchError;
       
@@ -134,11 +178,6 @@ export default function ClientApp() {
           { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${orderId}` },
           (payload) => {
             setActiveOrderStatus(payload.new.status);
-            
-            if (payload.new.status === 'ready') {
-              if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]);
-              playNotificationSound();
-            }
           }
         )
         .subscribe();
@@ -149,36 +188,6 @@ export default function ClientApp() {
     } finally {
       setIsProcessing(false);
     }
-  };
-
-  const playNotificationSound = () => {
-    try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
-      oscillator.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-      oscillator.type = 'triangle';
-      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // Pitch
-      oscillator.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.3); // Drop pitch
-      gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
-      oscillator.start();
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
-      oscillator.stop(audioCtx.currentTime + 0.5);
-      
-      setTimeout(() => {
-        const osc2 = audioCtx.createOscillator();
-        const gain2 = audioCtx.createGain();
-        osc2.connect(gain2);
-        gain2.connect(audioCtx.destination);
-        osc2.type = 'triangle';
-        osc2.frequency.setValueAtTime(880, audioCtx.currentTime);
-        gain2.gain.setValueAtTime(0.2, audioCtx.currentTime);
-        osc2.start();
-        gain2.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
-        osc2.stop(audioCtx.currentTime + 0.5);
-      }, 150);
-    } catch(e) {}
   };
 
   const handleOnTheWay = async () => {
@@ -495,6 +504,7 @@ export default function ClientApp() {
                       alert("Por favor ingresa tu nombre.");
                       return;
                     }
+                    localStorage.setItem('studioMenu_customerName', customerName.trim());
                     setCheckoutStep('payment')
                    }}
                   className="w-full bg-accent text-black py-5 rounded-2xl font-black text-sm tracking-[0.2em] uppercase transition-all shadow-xl shadow-accent/10"
@@ -515,12 +525,11 @@ export default function ClientApp() {
               >
                 VOLVER ATRÁS
               </button>
-            ) : checkoutStep === 'tracking' && activeOrderStatus === 'delivered' ? (
+            ) : checkoutStep === 'tracking' && ['delivered', 'completed'].includes(activeOrderStatus) ? (
                <button 
                 onClick={() => {
                   setCart([]);
                   setCheckoutStep('cart');
-                  setCustomerName('');
                   setActiveOrderId(null);
                 }}
                 className="w-full bg-white text-black py-5 rounded-2xl font-black text-sm tracking-[0.2em] uppercase transition-all shadow-xl"
@@ -697,6 +706,7 @@ export default function ClientApp() {
                     <button 
                       onClick={() => {
                         if(!customerName.trim()){ alert("Ingresa tu nombre."); return; }
+                        localStorage.setItem('studioMenu_customerName', customerName.trim());
                         setCheckoutStep('payment');
                       }}
                       className="w-full bg-accent text-black py-4 rounded-xl font-bold uppercase"
@@ -731,12 +741,11 @@ export default function ClientApp() {
                       Volver
                     </button>
                   </div>
-                ) : checkoutStep === 'tracking' && activeOrderStatus === 'delivered' ? (
+                ) : checkoutStep === 'tracking' && ['delivered', 'completed'].includes(activeOrderStatus) ? (
                   <button 
                     onClick={() => {
                       setCart([]);
                       setCheckoutStep('cart');
-                      setCustomerName('');
                       setActiveOrderId(null);
                     }}
                     className="w-full bg-white text-black py-5 rounded-2xl font-black text-lg uppercase"

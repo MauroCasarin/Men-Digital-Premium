@@ -18,7 +18,7 @@ export interface Order {
   created_at: string;
   items: CartItem[];
   total: number;
-  status: 'pending' | 'preparing' | 'ready' | 'on_the_way' | 'delivered';
+  status: 'pending' | 'preparing' | 'ready' | 'on_the_way' | 'delivered' | 'completed';
   payment_method: string;
   customer_name?: string;
 }
