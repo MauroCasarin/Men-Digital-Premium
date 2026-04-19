@@ -43,7 +43,7 @@ export default function ClientApp() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verdict, setVerdict] = useState<{valid: boolean, reason: string} | null>(null);
   const [paymentMode, setPaymentMode] = useState<'select' | 'transfer'>('select');
-  const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '' });
+  const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '', holder_name: '' });
 
   const fetchHistory = async () => {
     if (!customerName.trim()) {
@@ -199,7 +199,11 @@ export default function ClientApp() {
     const fetchBizSettings = async () => {
       try {
         const { data } = await supabase.from('business_settings').select('*').single();
-        if (data) setBusinessSettings({ alias: data.alias || '', cbu: data.cbu || '' });
+        if (data) setBusinessSettings({ 
+          alias: data.alias || '', 
+          cbu: data.cbu || '',
+          holder_name: data.holder_name || ''
+        });
       } catch (e) {}
     };
 
@@ -319,7 +323,8 @@ export default function ClientApp() {
           expectedTotal: total,
           expectedDate: now.toLocaleDateString('es-AR'),
           expectedTime: now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
-          businessAlias: businessSettings.alias
+          businessAlias: businessSettings.alias,
+          holderName: businessSettings.holder_name
         })
       });
 
@@ -714,8 +719,15 @@ export default function ClientApp() {
                            >
                               <X size={20} />
                            </button>
-                           <h4 className="font-bold text-accent mb-2">Total a transferir: ${total.toFixed(2)}</h4>
+                           <h4 className="font-bold text-accent mb-2">Datos de Transferencia</h4>
                            <div className="space-y-2 mb-4 bg-black/40 p-3 rounded-lg border border-white/5">
+                             <div className="flex justify-between items-center text-xs">
+                               <span className="text-gray-400">Titular:</span>
+                               <div className="flex items-center gap-2">
+                                 <strong className="text-white">{businessSettings.holder_name || 'No configurado'}</strong>
+                                 <button onClick={() => { if(businessSettings.holder_name) { navigator.clipboard.writeText(businessSettings.holder_name); alert('Nombre copiado'); } }} className="bg-accent/10 text-accent p-1 rounded hover:bg-accent hover:text-black transition-colors">Copiar</button>
+                               </div>
+                             </div>
                              <div className="flex justify-between items-center text-xs">
                                <span className="text-gray-400">Alias:</span>
                                <div className="flex items-center gap-2">
@@ -1103,10 +1115,27 @@ export default function ClientApp() {
                             >
                                <X size={16} />
                             </button>
-                            <h4 className="font-black text-accent text-xl mb-4 tracking-tighter">Total: ${total.toFixed(2)}</h4>
+                            <h4 className="font-black text-accent text-xl mb-4 tracking-tighter">Datos de Transferencia</h4>
                             
                             <div className="space-y-4 mb-6 bg-white/5 p-4 rounded-xl border border-white/5">
                               <div className="flex flex-col gap-1">
+                                <span className="text-[10px] uppercase font-black text-gray-500">Titular</span>
+                                <div className="flex items-center justify-between">
+                                  <strong className="text-white text-base truncate pr-2">{businessSettings.holder_name || 'No configurado'}</strong>
+                                  <button 
+                                    onClick={() => {
+                                       if (navigator.clipboard && businessSettings.holder_name) {
+                                          navigator.clipboard.writeText(businessSettings.holder_name);
+                                          alert('Nombre copiado');
+                                       }
+                                    }}
+                                    className="bg-accent/20 text-accent px-3 py-1 rounded-lg text-[10px] font-black"
+                                  >
+                                    COPIAR
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="flex flex-col gap-1 border-t border-white/5 pt-4">
                                 <span className="text-[10px] uppercase font-black text-gray-500">Alias</span>
                                 <div className="flex items-center justify-between">
                                   <strong className="text-white text-base truncate pr-2">{businessSettings.alias || 'No configurado'}</strong>

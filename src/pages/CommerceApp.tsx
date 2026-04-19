@@ -11,7 +11,7 @@ export default function CommerceApp() {
   const [activeTab, setActiveTab] = useState<'orders' | 'config'>('orders');
   
   const [menuItems, setMenuItems] = useState<Product[]>(PRODUCTS);
-  const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '' });
+  const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '', holder_name: '' });
   const [dbErrorSql, setDbErrorSql] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -23,7 +23,11 @@ export default function CommerceApp() {
         
         const { data: settingsData } = await supabase.from('business_settings').select('*').single();
         if (settingsData) {
-          setBusinessSettings({ alias: settingsData.alias || '', cbu: settingsData.cbu || '' });
+          setBusinessSettings({ 
+            alias: settingsData.alias || '', 
+            cbu: settingsData.cbu || '',
+            holder_name: settingsData.holder_name || ''
+          });
         }
         
         setDbErrorSql(null);
@@ -42,10 +46,11 @@ export default function CommerceApp() {
 CREATE TABLE IF NOT EXISTS business_settings (
   id TEXT PRIMARY KEY,
   alias TEXT,
-  cbu TEXT
+  cbu TEXT,
+  holder_name TEXT
 );
 
-INSERT INTO business_settings (id, alias, cbu) VALUES ('config', '', '') ON CONFLICT DO NOTHING;
+INSERT INTO business_settings (id, alias, cbu, holder_name) VALUES ('config', '', '', '') ON CONFLICT DO NOTHING;
 ALTER TABLE menu_items DISABLE ROW LEVEL SECURITY;
 ALTER TABLE business_settings DISABLE ROW LEVEL SECURITY;`);
         }
@@ -277,6 +282,16 @@ ALTER TABLE business_settings DISABLE ROW LEVEL SECURITY;`);
             <div>
               <h3 className="text-sm font-black text-accent uppercase tracking-widest mb-4">Datos de Cobro (Pagos Online)</h3>
               <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Nombre del Titular</label>
+                  <input 
+                    type="text" 
+                    value={businessSettings.holder_name} 
+                    onChange={e => setBusinessSettings({...businessSettings, holder_name: e.target.value})} 
+                    placeholder="ej: Juan Perez"
+                    className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-bold" 
+                  />
+                </div>
                 <div>
                   <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Alias de MercadoPago / Banco</label>
                   <input 

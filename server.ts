@@ -12,7 +12,7 @@ async function startServer() {
   // API for Groq Analysis
   app.post("/api/verify-receipt", async (req, res) => {
     try {
-      const { imageBase64, expectedTotal, expectedDate, expectedTime, businessAlias } = req.body;
+      const { imageBase64, expectedTotal, expectedDate, expectedTime, businessAlias, holderName } = req.body;
       const apiKey = process.env.MENU;
 
       if (!apiKey) {
@@ -38,13 +38,14 @@ DATOS PARA COMPARAR (MUY ESTRICTO):
 1. Monto a pagar: $${expectedTotal}
 2. Fecha requerida: ${expectedDate}
 3. Hora de hoy: ${expectedTime} (El comprobante debe ser de hace minutos).
-4. Cuenta destino para verificar: ${businessAlias}
+4. Cuenta destino para verificar (Alias): ${businessAlias}
+5. Titular de la cuenta: ${holderName}
 
 TAREAS:
 - Extrae el monto de la transferencia.
 - Extrae la fecha y hora.
 - Verifica que el estado sea exitoso.
-- Si el destino es visible, verifica que sea para "${businessAlias}".
+- Verifica que el destino sea "${businessAlias}" o el titular "${holderName}".
 
 Responde ÚNICAMENTE un JSON:
 {
