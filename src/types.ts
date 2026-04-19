@@ -22,4 +22,5 @@ export interface Order {
   status: 'pending' | 'preparing' | 'ready' | 'on_the_way' | 'delivered' | 'completed';
   payment_method: string;
   customer_name?: string;
+  is_paid?: boolean;
 }

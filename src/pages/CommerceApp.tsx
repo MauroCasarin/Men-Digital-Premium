@@ -11,16 +11,25 @@ export default function CommerceApp() {
   const [activeTab, setActiveTab] = useState<'orders' | 'config'>('orders');
   
   const [menuItems, setMenuItems] = useState<Product[]>(PRODUCTS);
+  const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '' });
   const [dbErrorSql, setDbErrorSql] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    const fetchMenu = async () => {
+    const fetchConfig = async () => {
       try {
-        const { data, error } = await supabase.from('menu_items').select('*').order('category', { ascending: false });
-        if (error) {
-          if (error.code === '42P01') { // relation does not exist
-            setDbErrorSql(`CREATE TABLE IF NOT EXISTS menu_items (
+        const { data: menuData } = await supabase.from('menu_items').select('*').order('category', { ascending: false });
+        if (menuData && menuData.length > 0) setMenuItems(menuData as Product[]);
+        
+        const { data: settingsData } = await supabase.from('business_settings').select('*').single();
+        if (settingsData) {
+          setBusinessSettings({ alias: settingsData.alias || '', cbu: settingsData.cbu || '' });
+        }
+        
+        setDbErrorSql(null);
+      } catch (err: any) {
+        if (err.code === '42P01') { 
+          setDbErrorSql(`CREATE TABLE IF NOT EXISTS menu_items (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT NOT NULL,
@@ -28,17 +37,21 @@ export default function CommerceApp() {
   image TEXT,
   category TEXT NOT NULL,
   is_recommendation BOOLEAN DEFAULT false
-);`);
-          }
-          throw error;
+);
+
+CREATE TABLE IF NOT EXISTS business_settings (
+  id TEXT PRIMARY KEY,
+  alias TEXT,
+  cbu TEXT
+);
+
+INSERT INTO business_settings (id, alias, cbu) VALUES ('config', '', '') ON CONFLICT DO NOTHING;
+ALTER TABLE menu_items DISABLE ROW LEVEL SECURITY;
+ALTER TABLE business_settings DISABLE ROW LEVEL SECURITY;`);
         }
-        if (data && data.length > 0) setMenuItems(data as Product[]);
-        setDbErrorSql(null);
-      } catch (err) {
-        console.warn("Using local fallback MENU items due to missing DB.");
       }
     };
-    fetchMenu();
+    fetchConfig();
   }, []);
 
   const toggleExpand = (id: string, e?: any) => {
@@ -168,27 +181,20 @@ export default function CommerceApp() {
   const saveMenuConfig = async () => {
     setIsSaving(true);
     try {
-      const { error } = await supabase.from('menu_items').upsert(menuItems);
-      if (error) {
-        if (error.code === '42P01' || error.message.includes('Could not find the table')) {
-          setDbErrorSql(`CREATE TABLE IF NOT EXISTS menu_items (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT NOT NULL,
-  price NUMERIC NOT NULL,
-  image TEXT,
-  category TEXT NOT NULL,
-  is_recommendation BOOLEAN DEFAULT false
-);`);
-        }
-        throw error;
-      }
-      alert("Menú guardado correctamente.");
+      // Save menu
+      const { error: menuError } = await supabase.from('menu_items').upsert(menuItems);
+      if (menuError) throw menuError;
+
+      // Save business settings
+      const { error: settsError } = await supabase.from('business_settings').upsert({ id: 'config', ...businessSettings });
+      if (settsError) throw settsError;
+
+      alert("Configuración guardada correctamente.");
       setDbErrorSql(null);
     } catch (e: any) {
       console.error(e);
       if (e.code === '42P01' || (e.message && e.message.includes('Could not find the table'))) {
-         alert("Tabla de Menú no encontrada. ¡Por favor copia el bloque de código SQL de color rojo que apareció y ejecútalo en Supabase!");
+         alert("Tablas no encontradas. ¡Por favor copia el bloque de código SQL de color rojo y ejecútalo en Supabase!");
       } else {
          alert("Error al guardar. " + e.message);
       }
@@ -254,8 +260,8 @@ export default function CommerceApp() {
 
           <div className="flex justify-between items-center bg-card-dark p-6 rounded-2xl border border-border-dark">
             <div>
-              <h2 className="text-xl font-bold mb-1">Editor del Menú</h2>
-              <p className="text-sm text-text-dim">Carga los combos, cervezas, activa o desactiva la "Recomendación" y cambia los precios.</p>
+              <h2 className="text-xl font-bold mb-1">Editor del Menú & Negocio</h2>
+              <p className="text-sm text-text-dim">Carga los combos, cervezas y tus datos de cobro (Alias/CBU).</p>
             </div>
             <div className="flex gap-3">
               <button onClick={handleAddProduct} className="flex items-center gap-2 bg-[#333] hover:bg-[#444] text-white px-4 py-2 rounded-xl font-bold transition-colors">
@@ -267,6 +273,41 @@ export default function CommerceApp() {
             </div>
           </div>
 
+          <div className="bg-card-dark border border-border-dark p-6 rounded-2xl grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h3 className="text-sm font-black text-accent uppercase tracking-widest mb-4">Datos de Cobro (Pagos Online)</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Alias de MercadoPago / Banco</label>
+                  <input 
+                    type="text" 
+                    value={businessSettings.alias} 
+                    onChange={e => setBusinessSettings({...businessSettings, alias: e.target.value})} 
+                    placeholder="ej: burger.pasion.mp"
+                    className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-bold" 
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Número de CBU / CVU</label>
+                  <input 
+                    type="text" 
+                    value={businessSettings.cbu} 
+                    onChange={e => setBusinessSettings({...businessSettings, cbu: e.target.value})} 
+                    placeholder="000000312000000..."
+                    className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-mono text-sm" 
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col justify-center bg-accent/5 p-6 rounded-xl border border-accent/20">
+              <p className="text-sm text-accent font-medium leading-relaxed italic">
+                "Configura estos datos para que tus clientes puedan pagar por transferencia. <br/><br/>
+                La IA verificará los comprobantes usando estos números y el ALIAS para asegurar que el dinero fue enviado a tu cuenta real."
+              </p>
+            </div>
+          </div>
+
+          <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mt-8 ml-2">Lista de Productos</h3>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {menuItems.map((product, index) => (
               <div key={product.id} className="bg-card-dark border border-border-dark p-6 rounded-2xl flex flex-col gap-4 relative">

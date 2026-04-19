@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShoppingBag, 
@@ -37,6 +37,13 @@ export default function ClientApp() {
   const [showHistory, setShowHistory] = useState(false);
   const [pastOrders, setPastOrders] = useState<Order[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  // New states for payment / AI verification
+  const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verdict, setVerdict] = useState<{valid: boolean, reason: string} | null>(null);
+  const [paymentMode, setPaymentMode] = useState<'select' | 'transfer'>('select');
+  const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '' });
 
   const fetchHistory = async () => {
     if (!customerName.trim()) {
@@ -178,7 +185,7 @@ export default function ClientApp() {
     // Attempt to load products from Supabase
     const fetchProducts = async () => {
       try {
-        const { data, error } = await supabase.from('menu_items').select('*').order('category', { ascending: false });
+        const { data } = await supabase.from('menu_items').select('*').order('category', { ascending: false });
         if (data && data.length > 0) {
           setProducts(data as Product[]);
           const cats = Array.from(new Set((data as Product[]).map(p => p.category)));
@@ -188,7 +195,16 @@ export default function ClientApp() {
         console.warn('Using fallback products, menu_items table may not exist yet.');
       }
     };
+
+    const fetchBizSettings = async () => {
+      try {
+        const { data } = await supabase.from('business_settings').select('*').single();
+        if (data) setBusinessSettings({ alias: data.alias || '', cbu: data.cbu || '' });
+      } catch (e) {}
+    };
+
     fetchProducts();
+    fetchBizSettings();
   }, []);
 
   const filteredProducts = useMemo(() => {
@@ -240,6 +256,64 @@ export default function ClientApp() {
   const clearCart = () => {
     if (window.confirm('¿Estás seguro de que deseas vaciar el carrito?')) {
       setCart([]);
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert("La imagen es demasiado pesada. Máximo 10MB, por favor.");
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = () => {
+        setReceiptImage(reader.result as string);
+        setVerdict(null); // reset prior verdicts
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const verifyReceipt = async () => {
+    if (!receiptImage) return;
+    setIsVerifying(true);
+    setVerdict(null);
+    try {
+      const now = new Date();
+      const response = await fetch('/api/verify-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: receiptImage,
+          expectedTotal: total,
+          expectedDate: now.toLocaleDateString(),
+          expectedTime: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          businessAlias: businessSettings.alias
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || "Error verificando comprobante");
+      }
+
+      setVerdict({
+        valid: data.valid,
+        reason: data.reason
+      });
+
+      if (data.valid) {
+         // Auto-checkout with verified payment
+         await handleCheckout('Transferencia / Pago Online - VERIFICADO ✅');
+      }
+    } catch (err: any) {
+      alert(err.message);
+      console.error(err);
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -560,28 +634,137 @@ export default function ClientApp() {
                    className="flex flex-col gap-4 py-4"
                  >
                    <h3 className="text-lg font-bold text-white mb-2">Método de pago</h3>
-                   <button 
-                     onClick={() => handleCheckout('efectivo')}
-                     disabled={isProcessing}
-                     className="w-full bg-[#222] hover:bg-[#333] border border-border-dark text-white p-4 rounded-xl flex items-center justify-between transition-colors"
-                   >
-                     <span className="font-bold">Efectivo al recibir</span>
-                     <ChevronRight size={18} className="text-text-dim" />
-                   </button>
-                   <button 
-                     onClick={() => handleCheckout('tarjeta')}
-                     disabled={isProcessing}
-                     className="w-full bg-[#222] hover:bg-[#333] border border-border-dark text-white p-4 rounded-xl flex items-center justify-between transition-colors"
-                   >
-                     <span className="font-bold">Tarjeta de Crédito / Débito</span>
-                     <ChevronRight size={18} className="text-text-dim" />
-                   </button>
-                   {isProcessing && (
-                     <div className="flex items-center justify-center gap-2 mt-4 text-accent">
-                       <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
-                         <Clock size={16} />
-                       </motion.div>
-                       <span className="text-sm font-bold animate-pulse">Procesando pedido...</span>
+                   
+                   {paymentMode === 'select' ? (
+                     <>
+                       <button 
+                         onClick={() => handleCheckout('efectivo')}
+                         disabled={isProcessing}
+                         className="w-full bg-[#222] hover:bg-[#333] border border-border-dark text-white p-4 rounded-xl flex items-center justify-between transition-colors"
+                       >
+                         <span className="font-bold">Efectivo al recibir</span>
+                         <ChevronRight size={18} className="text-text-dim" />
+                       </button>
+                       <button 
+                         onClick={() => handleCheckout('tarjeta')}
+                         disabled={isProcessing}
+                         className="w-full bg-[#222] hover:bg-[#333] border border-border-dark text-white p-4 rounded-xl flex items-center justify-between transition-colors"
+                       >
+                         <span className="font-bold">Tarjeta de Crédito / Débito presencial</span>
+                         <ChevronRight size={18} className="text-text-dim" />
+                       </button>
+                       <button 
+                         onClick={() => setPaymentMode('transfer')}
+                         disabled={isProcessing}
+                         className="w-full bg-accent hover:bg-yellow-400 text-black p-4 rounded-xl flex items-center justify-between transition-colors mt-2"
+                       >
+                         <span className="font-bold">Transferencia / MercadoPago (Subir Comprobante)</span>
+                         <ChevronRight size={18} />
+                       </button>
+                       {isProcessing && (
+                         <div className="flex items-center justify-center gap-2 mt-4 text-accent">
+                           <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
+                             <Clock size={16} />
+                           </motion.div>
+                           <span className="text-sm font-bold animate-pulse">Procesando pedido...</span>
+                         </div>
+                       )}
+                     </>
+                   ) : (
+                     <div className="flex flex-col gap-4">
+                        <div className="bg-[#111] border border-[#333] p-4 rounded-xl relative">
+                           <button 
+                             onClick={() => setPaymentMode('select')}
+                             className="absolute top-2 right-2 text-gray-500 hover:text-white"
+                           >
+                              <X size={20} />
+                           </button>
+                           <h4 className="font-bold text-accent mb-2">Total a transferir: ${total.toFixed(2)}</h4>
+                           <div className="space-y-2 mb-4 bg-black/40 p-3 rounded-lg border border-white/5">
+                             <div className="flex justify-between items-center text-xs">
+                               <span className="text-gray-400">Alias:</span>
+                               <div className="flex items-center gap-2">
+                                 <strong className="text-white">{businessSettings.alias || 'Cargando...'}</strong>
+                                 <button 
+                                   onClick={() => {
+                                      navigator.clipboard.writeText(businessSettings.alias);
+                                      alert('Alias copiado');
+                                   }}
+                                   className="bg-accent/10 text-accent p-1 rounded hover:bg-accent hover:text-black transition-colors"
+                                 >
+                                   Copiar
+                                 </button>
+                               </div>
+                             </div>
+                             <div className="flex justify-between items-center text-xs">
+                               <span className="text-gray-400">CBU:</span>
+                               <div className="flex items-center gap-2 font-mono">
+                                 <strong className="text-white">{businessSettings.cbu || 'Cargando...'}</strong>
+                                 <button 
+                                   onClick={() => {
+                                      navigator.clipboard.writeText(businessSettings.cbu);
+                                      alert('CBU copiado');
+                                   }}
+                                   className="bg-accent/10 text-accent p-1 rounded hover:bg-accent hover:text-black transition-colors"
+                                 >
+                                   Copiar
+                                 </button>
+                               </div>
+                             </div>
+                           </div>
+                           
+                           {!receiptImage ? (
+                             <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-[#444] hover:border-accent hover:bg-accent/5 rounded-xl cursor-pointer transition-all text-gray-400 hover:text-accent group">
+                               <div className="bg-[#1a1a1a] p-4 rounded-full mb-3 group-hover:scale-110 transition-transform">
+                                 <PlusCircle size={32} />
+                               </div>
+                               <span className="text-sm font-bold">Adjuntar Comprobante</span>
+                               <p className="text-[10px] opacity-60 mt-1">Soporta Capturas, PNG, JPG, WEBP</p>
+                               <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                             </label>
+                           ) : (
+                             <div className="flex flex-col gap-3">
+                               <div className="relative h-48 rounded-xl overflow-hidden border border-[#444]">
+                                 <img src={receiptImage} alt="Comprobante" className="w-full h-full object-cover" />
+                                 <button 
+                                   onClick={() => { setReceiptImage(null); setVerdict(null); }}
+                                   className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
+                                 >
+                                   <X size={16} />
+                                 </button>
+                               </div>
+                               
+                               {verdict ? (
+                                 <div className={`p-3 rounded-xl border ${verdict.valid ? 'bg-green-500/10 border-green-500 text-green-400' : 'bg-red-500/10 border-red-500 text-red-400'}`}>
+                                    <h5 className="font-bold text-sm mb-1">{verdict.valid ? '¡Pago Verificado!' : 'Comprobante Rechazado'}</h5>
+                                    <p className="text-xs">{verdict.reason}</p>
+                                    {!verdict.valid && (
+                                       <button onClick={() => { setReceiptImage(null); setVerdict(null); }} className="mt-2 text-white bg-red-500/20 hover:bg-red-500/40 px-3 py-1 rounded text-xs font-bold transition-colors">Volver a intentar</button>
+                                    )}
+                                 </div>
+                               ) : (
+                                 <button 
+                                   onClick={verifyReceipt}
+                                   disabled={isVerifying}
+                                   className="w-full bg-accent hover:bg-yellow-400 text-black py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+                                 >
+                                   {isVerifying ? (
+                                      <>
+                                        <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
+                                          <UtensilsCrossed size={18} />
+                                        </motion.div>
+                                        VERIFICANDO CON IA...
+                                      </>
+                                   ) : (
+                                      <>
+                                        <CheckCircle size={18} /> VERIFICAR PAGO
+                                      </>
+                                   )}
+                                 </button>
+                               )}
+                             </div>
+                           )}
+                        </div>
                      </div>
                    )}
                  </motion.div>
