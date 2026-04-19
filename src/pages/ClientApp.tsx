@@ -197,7 +197,7 @@ export default function ClientApp() {
             whileHover={{ scale: 1.05 }}
             className="text-xl sm:text-2xl font-extrabold tracking-tighter cursor-default"
           >
-            IASTUDIO<span className="text-accent">.</span>MENU
+            TU NOMBRE<span className="text-accent">.</span>MENU
           </motion.div>
           <div className="hidden lg:flex gap-3">
             {categories.map(cat => (
