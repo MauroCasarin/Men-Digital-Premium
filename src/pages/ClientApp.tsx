@@ -805,7 +805,7 @@ export default function ClientApp() {
                   <div className="w-20 h-20 rounded-full bg-[#1a1a1a] flex items-center justify-center">
                     <ShoppingBag size={40} strokeWidth={1} />
                   </div>
-                  <p className="text-sm font-medium">Su carrito está esperando<br/>una selección gourmet.</p>
+                  <p className="text-sm font-medium">Su carrito está esperando<br/>una selección.</p>
                 </motion.div>
               ) : (
                 cart.map(item => (
