@@ -5,42 +5,42 @@ export default async function handler(req, res) {
 
   try {
     const { imageBase64, expectedTotal, expectedDate, expectedTime, businessAlias, holderName } = req.body;
-    const apiKey = process.env.GROQ_API_KEY || process.env.MENU;
+    
+    // Fallback order: tries Gemini, then Groq keys if they put it there by accident, but requires a Gemini key
+    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
 
     if (!apiKey) {
-      return res.status(500).json({ error: "La API KEY de GROQ no está configurada en los Secrets de Vercel." });
+      return res.status(500).json({ error: "Groq eliminó todos sus modelos de Visión. Hemos migrado a Gemini, pero necesitas configurar GEMINI_API_KEY en Vercel." });
     }
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    // Limpiar el base64 prefix si existe
+    const base64Data = imageBase64.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "llama-3.2-90b-vision-preview",
-        max_tokens: 500,
-        messages: [
+        contents: [
           {
-            role: "user",
-            content: [
+            parts: [
               { 
-                type: "text", 
                 text: `Analiza este comprobante de pago de transferencia o billetera virtual. 
 DATOS PARA COMPARAR (MUY ESTRICTO):
 1. Monto a pagar: $${expectedTotal}
 2. Fecha requerida: ${expectedDate}
 3. Hora de hoy: ${expectedTime} (El comprobante debe ser de hace minutos).
-4. Cuenta destino para verificar (Alias): ${businessAlias}
+4. Cuenta destino para verificar (Alias o CVU): ${businessAlias}
 5. Titular de la cuenta: ${holderName}
 
 TAREAS:
-- Extrae el monto de la transferencia.
+- Extrae el monto exacto de la transferencia.
 - Extrae la fecha y hora.
-- Verifica que el estado sea exitoso.
+- Verifica que el estado sea exitoso / OK.
 - Verifica que el destino sea "${businessAlias}" o el titular "${holderName}".
 
-Responde ÚNICAMENTE un JSON:
+Responde ÚNICAMENTE un JSON válido:
 {
   "valid": true o false,
   "detected_amount": numero,
@@ -49,43 +49,38 @@ Responde ÚNICAMENTE un JSON:
 }` 
               },
               { 
-                type: "image_url", 
-                image_url: { 
-                  url: imageBase64 
+                inline_data: { 
+                  mime_type: "image/jpeg",
+                  data: base64Data
                 } 
               }
             ]
           }
         ],
-        temperature: 0.1
+        generationConfig: {
+          temperature: 0.1,
+          response_mime_type: "application/json"
+        }
       })
     });
 
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      console.error("Groq API Error:", data);
-      const groqMsg = data?.error?.message || JSON.stringify(data);
-      return res.status(500).json({ error: `Fallo Groq: ${groqMsg}` });
+      console.error("Gemini API Error:", data);
+      const errorMsg = data?.error?.message || JSON.stringify(data);
+      return res.status(500).json({ error: `Fallo Gemini: ${errorMsg}` });
     }
 
-    let content = data.choices?.[0]?.message?.content;
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!content) {
       return res.status(500).json({ error: "La IA no devolvió una respuesta válida." });
     }
 
-    try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        content = jsonMatch[0];
-      }
-      const parsed = JSON.parse(content);
-      res.json(parsed);
-    } catch (e) {
-      console.error("Failed to parse vision response:", content);
-      res.status(500).json({ error: "La respuesta de la IA no fue válida." });
-    }
+    const parsed = JSON.parse(content);
+    res.json(parsed);
+    
   } catch (error) {
     console.error("Verify receipt error:", error);
     res.status(500).json({ error: error.message || "Error interno del servidor Vercel" });
