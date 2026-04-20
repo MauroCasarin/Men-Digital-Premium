@@ -226,7 +226,9 @@ export default function ClientApp() {
         if (data) setBusinessSettings({ 
           alias: data.alias || '', 
           cbu: data.cbu || '',
-          holder_name: data.holder_name || ''
+          holder_name: data.holder_name || '',
+          name: data.name || 'TU NOMBRE.MENU',
+          logo_url: data.logo_url || ''
         });
       } catch (e) {}
     };

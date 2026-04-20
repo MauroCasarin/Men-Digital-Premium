@@ -539,7 +539,14 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS categories JSONB DEFAULT 
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-text-dim mt-1">
+                    {/* Payment Status Indicator */}
+                    <div className="flex items-center gap-2 mt-2">
+                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${order.is_paid ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
+                          {order.is_paid ? 'PAGADO ✅' : 'PENDIENTE ⏳'}
+                       </span>
+                       <span className="text-[10px] text-gray-400 font-bold uppercase">{order.payment_method}</span>
+                    </div>
+                    <p className="text-xs text-text-dim mt-2">
                       {new Date(order.created_at).toLocaleString()}
                     </p>
                   </div>
