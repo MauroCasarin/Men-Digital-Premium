@@ -6,11 +6,11 @@ export default async function handler(req, res) {
   try {
     const { imageBase64, expectedTotal, expectedDate, expectedTime, businessAlias, holderName } = req.body;
     
-    // Fallback order: tries Gemini, then Groq keys if they put it there by accident, but requires a Gemini key
-    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+    // Usamos GOOGLE_AI_KEY para evitar bloqueos por nombres reservados
+    const apiKey = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
 
     if (!apiKey) {
-      return res.status(500).json({ error: "Groq eliminó todos sus modelos de Visión. Hemos migrado a Gemini, pero necesitas configurar GEMINI_API_KEY en Vercel." });
+      return res.status(500).json({ error: "Falta la clave GOOGLE_AI_KEY en Vercel." });
     }
 
     // Limpiar el base64 prefix si existe

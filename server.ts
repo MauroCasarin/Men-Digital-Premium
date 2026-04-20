@@ -14,10 +14,10 @@ async function startServer() {
   app.post("/api/verify-receipt", async (req, res) => {
     try {
       const { imageBase64, expectedTotal, expectedDate, expectedTime, businessAlias, holderName } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+      const apiKey = process.env.GOOGLE_AI_KEY || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
 
       if (!apiKey) {
-        return res.status(500).json({ error: "Groq eliminó todos sus modelos de Visión. Hemos migrado a Gemini, necesitas GEMINI_API_KEY en tu .env" });
+        return res.status(500).json({ error: "Falta la clave GOOGLE_AI_KEY en Vercel." });
       }
 
       const base64Data = imageBase64.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
