@@ -44,6 +44,7 @@ export default function ClientApp() {
   const [verdict, setVerdict] = useState<{valid: boolean, reason: string} | null>(null);
   const [paymentMode, setPaymentMode] = useState<'select' | 'transfer'>('select');
   const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '', holder_name: '', name: 'TU NOMBRE.MENU', logo_url: '', categories: ['Menú', 'Bebidas'] });
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   const fetchHistory = async () => {
     if (!customerName.trim()) {
@@ -476,23 +477,22 @@ export default function ClientApp() {
       <div className="w-full max-w-[1400px] flex flex-col md:grid md:grid-cols-[1fr_1fr_360px] md:grid-rows-[auto_1fr_1fr_auto] gap-5">
         
         {/* Header Bento Item */}
-        <header className="bento-card md:col-span-2 flex flex-row items-center justify-between bg-linear-to-r from-card-dark to-[#1a1a1a] h-20">
-          <motion.div 
-            whileHover={{ scale: 1.05 }}
-            className="flex items-center gap-3 cursor-default"
-          >
-            {businessSettings.logo_url ? (
-              <img src={businessSettings.logo_url} alt="Logo" className="h-10 w-auto rounded object-cover" />
-            ) : null}
-            <span className="text-xl sm:text-2xl font-extrabold tracking-tighter">
-               {businessSettings.name}
-            </span>
-          </motion.div>
-          <div className="hidden lg:flex gap-3">
+        <header className="bento-card md:col-span-2 flex flex-col gap-4 bg-linear-to-r from-card-dark to-[#1a1810] p-6">
+          <div className="flex items-center justify-between">
+            <motion.div whileHover={{ scale: 1.05 }} className="flex items-center gap-3 cursor-default">
+              {businessSettings.logo_url && <img src={businessSettings.logo_url} alt="Logo" className="h-10 w-auto rounded object-cover" />}
+              <span className="text-xl sm:text-2xl font-extrabold tracking-tighter">{businessSettings.name}</span>
+            </motion.div>
+            <button onClick={fetchHistory} className="p-3 bg-[#222] rounded-xl text-white hover:bg-[#333] transition-colors">
+              <History size={20} />
+            </button>
+          </div>
+          
+          {/* Categories - Auto-scaling, just below title */}
+          <div className="flex flex-wrap gap-2">
             {categories.map(cat => (
               <motion.button
                 key={cat}
-                whileHover={{ y: -3 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setActiveCategory(cat)}
                 className={`px-4 py-2 rounded-full text-[13px] font-semibold transition-all ${
@@ -502,117 +502,76 @@ export default function ClientApp() {
                 {cat}
               </motion.button>
             ))}
-            <motion.button
-              whileHover={{ y: -3 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={fetchHistory}
-              className="px-4 py-2 rounded-full text-[13px] font-semibold transition-all bg-[#222] text-white hover:bg-[#333] flex items-center gap-2"
-            >
-              <History size={16} /> Mis Pedidos
-            </motion.button>
-          </div>
-          
-          <div className="md:hidden flex items-center gap-2">
-            <button 
-              onClick={fetchHistory}
-              className="p-3 bg-[#222] rounded-xl text-white hover:scale-105 transition-transform"
-            >
-              <History size={20} />
-            </button>
-            <button 
-              onClick={() => setShowCartMobile(true)}
-              className="relative p-3 bg-accent rounded-xl text-black hover:scale-105 transition-transform"
-            >
-              <ShoppingBag size={20} />
-              {cart.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-white text-black text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border border-black shadow-lg">
-                  {cart.reduce((a, b) => a + b.quantity, 0)}
-                </span>
-              )}
-            </button>
           </div>
         </header>
 
-        {/* Categories Mobile (shown only on mobile) */}
-        <div className="flex md:hidden overflow-x-auto gap-2 pb-2 scrollbar-none">
-           {categories.map(cat => (
-              <motion.button
-                key={cat}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setActiveCategory(cat)}
-                className={`whitespace-nowrap px-4 py-2 rounded-full text-[12px] font-bold transition-all ${
-                  activeCategory === cat ? 'bg-accent text-black' : 'bg-card-dark text-white border border-border-dark'
-                }`}
+        {/* Product Detail Modal */}
+        <AnimatePresence>
+          {selectedProduct && (
+            <motion.div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+              onClick={() => setSelectedProduct(null)}
+            >
+              <motion.div
+                className="bg-[#1a1810] border border-[#333] p-4 sm:p-6 rounded-3xl w-full max-w-sm sm:max-w-lg max-h-[85vh] overflow-y-auto relative"
+                onClick={e => e.stopPropagation()}
               >
-                {cat}
-              </motion.button>
-            ))}
-        </div>
+                 <button onClick={() => setSelectedProduct(null)} className="absolute top-4 right-4 text-white p-2 bg-black/50 rounded-full"><X size={20}/></button>
+                 <img src={selectedProduct.image} className="w-full h-48 sm:h-64 object-cover rounded-2xl mb-4" />
+                 <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">{selectedProduct.name}</h2>
+                 <p className="text-sm sm:text-base text-gray-400 mb-6">{selectedProduct.description}</p>
+                 
+                 <div className="flex justify-between items-center mb-6">
+                    <span className="text-xl sm:text-2xl font-bold text-accent">${selectedProduct.price.toFixed(2)}</span>
+                    <div className="flex items-center gap-4 bg-[#222] p-2 rounded-xl">
+                      <button onClick={() => removeFromCart(Number(selectedProduct.id))} className="p-2 text-red-400"><Minus size={20}/></button>
+                      <span className="font-bold">{cart.find(c => c.product.id === selectedProduct.id)?.quantity || 0}</span>
+                      <button onClick={() => addToCart(selectedProduct)} className="p-2 text-accent"><Plus size={20}/></button>
+                    </div>
+                 </div>
 
-        {recommendations.length > 0 && recommendations.map(rec => (
-          <motion.div 
-            key={`rec-${rec.id}`}
-            whileHover={{ y: -4, shadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)' }}
-            transition={{ duration: 0.2 }}
-            className={`bento-card ${recommendations.length === 1 ? 'md:col-span-1 md:row-span-2 min-h-[400px]' : 'md:col-span-1 min-h-[250px]'} bg-[#1a1810] border-[#443a10] overflow-hidden group`}
-          >
-            <div className="absolute inset-0 opacity-20 group-hover:opacity-40 transition-opacity duration-500">
-              {rec.image && <img src={rec.image} alt="" className="w-full h-full object-cover" />}
-            </div>
-            <div className="relative z-10 h-full flex flex-col justify-end">
-              <span className="inline-block px-2 py-1 bg-accent text-black text-[10px] font-extrabold rounded mb-3 self-start">RECOMENDACIÓN</span>
-              <h2 className="text-4xl font-extrabold leading-none mb-4 text-white">
-                {rec.name.split(' ').map((word, i) => (
-                  <span key={i} className="block">{word}</span>
-                ))}
-              </h2>
-              <p className="text-sm text-text-dim mb-8 max-w-xs leading-relaxed">{rec.description}</p>
-              <div className="flex items-center justify-between">
-                <span className="text-3xl font-bold text-accent tracking-tighter">${rec.price.toFixed(2)}</span>
-                <button 
-                  onClick={() => addToCart(rec)}
-                  className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-3xl font-light hover:bg-accent hover:text-black transition-all shadow-xl hover:rotate-90"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-
+                 <button 
+                      onClick={() => setSelectedProduct(null)}
+                      className="w-full bg-accent text-black font-bold py-3 rounded-xl hover:bg-yellow-400 transition-colors"
+                    >
+                      Volver al Menú
+                 </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
         {/* Dynamic Product Grid Items */}
-        {filteredProducts.filter(p => !p.is_recommendation).map((product) => (
-          <motion.div 
+        {filteredProducts.map((product) => (
+           <motion.div 
             key={product.id}
-            whileHover={{ scale: 1.02, y: -2 }}
-            transition={{ duration: 0.2 }}
-            className="bento-card overflow-hidden group min-h-[240px] md:min-h-0 cursor-pointer"
+            whileHover={{ scale: 1.02 }}
+            className={`bento-card overflow-hidden group min-h-[240px] cursor-pointer ${product.is_recommendation ? 'md:col-span-1 md:row-span-2 bg-[#1a1810]' : ''}`}
+            onClick={() => setSelectedProduct(product)}
           >
             <div className="absolute inset-0">
                <img 
                 src={product.image} 
                 alt={product.name}
                 referrerPolicy="no-referrer"
-                className="w-full h-full object-cover opacity-40 group-hover:scale-110 transition-transform duration-700" 
+                className="w-full h-full object-cover opacity-50 group-hover:scale-105 transition-transform duration-700" 
               />
-              <div className="absolute inset-0 bg-linear-to-t from-black via-black/40 to-transparent" />
+              <div className="absolute inset-0 bg-linear-to-t from-black to-transparent" />
             </div>
-            <button 
-              onClick={() => addToCart(product)}
-              className="absolute top-5 right-5 z-20 w-10 h-10 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-xl font-light hover:bg-accent hover:text-black transition-all hover:scale-110"
-            >
-              +
-            </button>
-            <div className="relative z-10 mt-auto">
-              <h3 className="text-xl font-bold text-white mb-1 group-hover:text-accent transition-colors">{product.name}</h3>
-              <p className="text-[11px] text-text-dim mb-3 line-clamp-1">{product.description}</p>
-              <span className="text-lg font-bold text-accent tracking-tight">${product.price.toFixed(2)}</span>
+            
+            <div className="relative z-10 mt-auto p-4">
+              {product.is_recommendation && <span className="inline-block px-2 py-1 bg-accent text-black text-[10px] font-extrabold rounded mb-2">RECOMENDACIÓN</span>}
+              <h3 className="text-lg font-bold text-white group-hover:text-accent transition-colors">{product.name}</h3>
+              <div className="flex justify-between items-center mt-2">
+                <span className="text-md font-bold text-accent">${product.price.toFixed(2)}</span>
+                <span className="text-[10px] bg-black/60 px-2 py-1 rounded-full text-white">{cart.find(c => c.product.id === product.id)?.quantity || 0} en carrito</span>
+              </div>
             </div>
           </motion.div>
         ))}
 
-        {/* Sidebar Cart Bento Item */}
-        <aside className="bento-card md:row-span-4 bg-[#0F0F0F] flex flex-col p-6 h-full md:max-h-screen shadow-2xl overflow-hidden hidden md:flex">
+        {/* Sidebar Cart Bento Item - Restore to original location */}
+        <aside className="bento-card md:row-span-4 bg-[#0F0F0F] flex flex-col p-6 h-full md:max-h-[90vh] sticky top-5 shadow-2xl overflow-hidden min-h-[400px]">
           <div className="flex items-center justify-between mb-6 pb-4 border-b border-border-dark">
             <h2 className="text-2xl font-extrabold tracking-tight">Tu Pedido</h2>
             {cart.length > 0 && checkoutStep === 'cart' && (
