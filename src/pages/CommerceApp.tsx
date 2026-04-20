@@ -344,7 +344,7 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS categories JSONB DEFAULT 
           <div className="flex justify-between items-center bg-card-dark p-6 rounded-2xl border border-border-dark">
             <div>
               <h2 className="text-xl font-bold mb-1">Editor del Menú & Negocio</h2>
-              <p className="text-sm text-text-dim">Carga los combos, cervezas y tus datos de cobro (Alias/CBU).</p>
+              <p className="text-sm text-text-dim"> Suma más categorías según productos, para cobro on line agrega tus datos.</p>
             </div>
             <div className="flex gap-3">
               <button onClick={handleAddProduct} className="flex items-center gap-2 bg-[#333] hover:bg-[#444] text-white px-4 py-2 rounded-xl font-bold transition-colors">
