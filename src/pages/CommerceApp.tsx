@@ -83,6 +83,55 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS categories JSONB DEFAULT 
     });
   };
 
+  // Safe global audio context to prevent creating too many contexts in a session
+  const getCommerceAudioContext = (() => {
+    let ctx: AudioContext | null = null;
+    return () => {
+      if (!ctx) {
+        try {
+          ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        } catch (e) {
+          console.warn("AudioContext init failed", e);
+        }
+      }
+      return ctx;
+    };
+  })();
+
+  const playNewOrderSound = () => {
+    try {
+      const audioCtx = getCommerceAudioContext();
+      if (!audioCtx) return;
+      
+      // Intentar reanudar por directrices de audio en móviles
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(e => console.warn(e));
+      }
+      
+      const playChime = (freq: number, startTime: number) => {
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.type = 'sine'; // Sonido dulce y resonante
+        oscillator.frequency.setValueAtTime(freq, startTime);
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(0.5, startTime + 0.1);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 1.0);
+        oscillator.start(startTime);
+        oscillator.stop(startTime + 1.0);
+      };
+      
+      const t = audioCtx.currentTime;
+      playChime(523.25, t);      // Do
+      playChime(659.25, t + 0.1); // Mi
+      playChime(783.99, t + 0.2); // Sol
+      playChime(1046.50, t + 0.3); // Do octava
+    } catch (e) {
+      console.warn("Could not play order sound:", e);
+    }
+  };
+
   useEffect(() => {
     // 1. Fetch existing orders
     const fetchOrders = async () => {
@@ -110,6 +159,7 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS categories JSONB DEFAULT 
         },
         (payload) => {
           console.log("New order received!", payload.new);
+          playNewOrderSound();
           setOrders((current) => [payload.new as Order, ...current]);
         }
       )
@@ -253,13 +303,22 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS categories JSONB DEFAULT 
         
         <div className="flex bg-[#222] p-1 rounded-2xl w-full md:w-auto overflow-hidden">
           <button 
-            onClick={() => setActiveTab('orders')}
+             onClick={() => {
+               // Activate AudioContext via user interaction as required by mobile browsers
+               const ctx = getCommerceAudioContext();
+               if (ctx && ctx.state === 'suspended') ctx.resume().catch(e => console.warn(e));
+               setActiveTab('orders');
+             }}
             className={`flex-1 md:w-32 py-2 text-sm font-bold rounded-xl transition-all ${activeTab === 'orders' ? 'bg-accent text-black shadow-lg shadow-accent/20' : 'text-gray-400 hover:text-white'}`}
           >
             Pedidos
           </button>
           <button 
-            onClick={() => setActiveTab('config')}
+             onClick={() => {
+               const ctx = getCommerceAudioContext();
+               if (ctx && ctx.state === 'suspended') ctx.resume().catch(e => console.warn(e));
+               setActiveTab('config');
+             }}
             className={`flex-1 md:w-40 py-2 text-sm font-bold rounded-xl transition-all ${activeTab === 'config' ? 'bg-white text-black shadow-lg shadow-white/20' : 'text-gray-400 hover:text-white'}`}
           >
             Menú & Config

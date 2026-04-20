@@ -69,9 +69,29 @@ export default function ClientApp() {
     }
   };
 
+  // Safe global audio context to prevent creating >6 contexts per session (which crashes iOS/Safari).
+  const getAudioContext = (() => {
+    let ctx: AudioContext | null = null;
+    return () => {
+      if (!ctx) {
+        try {
+          ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        } catch (e) {
+          console.warn("AudioContext init failed", e);
+        }
+      }
+      return ctx;
+    };
+  })();
+
   const playNotificationSound = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioCtx = getAudioContext();
+      if (!audioCtx) return;
+      
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(e => console.warn(e));
+      }
       
       const playBeep = (freq: number, startTime: number) => {
         const oscillator = audioCtx.createOscillator();
@@ -129,9 +149,11 @@ export default function ClientApp() {
         setToastNotification({ title, body, status: activeOrderStatus });
         
         // Native browser notification if permitted
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification(`Tu Pedido: ${title}`, { body });
-        }
+        try {
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(`Tu Pedido: ${title}`, { body });
+          }
+        } catch (e) { console.warn('Native notification failed', e); }
         
         removeTimer = setTimeout(() => {
           setToastNotification(null);
@@ -142,12 +164,16 @@ export default function ClientApp() {
     if (activeOrderStatus === 'ready') {
       // Tocar y vibrar inmediatamente al cambiar a ready
       playNotificationSound();
-      if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]);
+      try {
+        if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]);
+      } catch (e) {}
       
       // Configurar loop cada 3 segundos hasta que cambie el estado
       alertInterval = setInterval(() => {
         playNotificationSound();
-        if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]);
+        try {
+          if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]);
+        } catch (e) {}
       }, 3000);
     }
 
