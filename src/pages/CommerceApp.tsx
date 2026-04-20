@@ -11,8 +11,9 @@ export default function CommerceApp() {
   const [activeTab, setActiveTab] = useState<'orders' | 'config'>('orders');
   
   const [menuItems, setMenuItems] = useState<Product[]>(PRODUCTS);
-  const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '', holder_name: '' });
+  const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '', holder_name: '', name: 'TU NOMBRE.MENU', logo_url: '', categories: ['Menú', 'Bebidas'] });
   const [dbErrorSql, setDbErrorSql] = useState<string | null>(null);
+  const [newCategory, setNewCategory] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -21,12 +22,18 @@ export default function CommerceApp() {
         const { data: menuData } = await supabase.from('menu_items').select('*').order('category', { ascending: false });
         if (menuData && menuData.length > 0) setMenuItems(menuData as Product[]);
         
-        const { data: settingsData } = await supabase.from('business_settings').select('*').single();
+        const { data: settingsData, error } = await supabase.from('business_settings').select('*').single();
+        
+        if (error && error.code !== 'PGRST116') throw error; // Allow 0 rows but throw others
+
         if (settingsData) {
           setBusinessSettings({ 
             alias: settingsData.alias || '', 
             cbu: settingsData.cbu || '',
-            holder_name: settingsData.holder_name || ''
+            holder_name: settingsData.holder_name || '',
+            name: settingsData.name || 'TU NOMBRE.MENU',
+            logo_url: settingsData.logo_url || '',
+            categories: settingsData.categories || ['Menú', 'Bebidas']
           });
         }
         
@@ -47,12 +54,19 @@ CREATE TABLE IF NOT EXISTS business_settings (
   id TEXT PRIMARY KEY,
   alias TEXT,
   cbu TEXT,
-  holder_name TEXT
+  holder_name TEXT,
+  name TEXT,
+  logo_url TEXT,
+  categories JSONB DEFAULT '["Menú", "Bebidas"]'::jsonb
 );
 
-INSERT INTO business_settings (id, alias, cbu, holder_name) VALUES ('config', '', '', '') ON CONFLICT DO NOTHING;
+INSERT INTO business_settings (id, alias, cbu, holder_name, name, logo_url, categories) VALUES ('config', '', '', '', 'TU NOMBRE.MENU', '', '["Menú", "Bebidas"]'::jsonb) ON CONFLICT DO NOTHING;
 ALTER TABLE menu_items DISABLE ROW LEVEL SECURITY;
 ALTER TABLE business_settings DISABLE ROW LEVEL SECURITY;`);
+        } else if (err.message && (err.message.includes('column') || err.message.includes('No se pudo encontrar la columna'))) {
+          setDbErrorSql(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS logo_url TEXT;
+ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS categories JSONB DEFAULT '["Menú", "Bebidas"]'::jsonb;`);
         }
       }
     };
@@ -192,7 +206,12 @@ ALTER TABLE business_settings DISABLE ROW LEVEL SECURITY;`);
 
       // Save business settings
       const { error: settsError } = await supabase.from('business_settings').upsert({ id: 'config', ...businessSettings });
-      if (settsError) throw settsError;
+      if (settsError) {
+         if (settsError.message && settsError.message.includes('column')) {
+            throw new Error("Missing database columns. " + settsError.message);
+         }
+         throw settsError;
+      }
 
       alert("Configuración guardada correctamente.");
       setDbErrorSql(null);
@@ -254,9 +273,9 @@ ALTER TABLE business_settings DISABLE ROW LEVEL SECURITY;`);
           className="space-y-6"
         >
           {dbErrorSql && (
-            <div className="bg-red-500/10 border border-red-500/50 p-6 rounded-2xl">
-              <h3 className="text-red-500 font-bold mb-2 text-lg">⚠️ Base de datos no encontrada</h3>
-              <p className="text-sm text-red-200 mb-4">Para que los cambios del menú se guarden y envíen a los clientes, debes crear la tabla <strong>menu_items</strong> en tu Supabase SQL Editor. Copia y ejecuta este código:</p>
+            <div className="bg-red-500/10 border border-red-500/50 p-6 rounded-2xl mb-8">
+              <h3 className="text-red-500 font-bold mb-2 text-lg">⚠️ Base de datos requiere actualización</h3>
+              <p className="text-sm text-red-200 mb-4">Para usar las nuevas funciones (logo, categorías editables, nombre), debes ejecutar esta consulta en el SQL Editor de Supabase (o si no existe la tabla, crearla):</p>
               <pre className="bg-[#111] p-4 rounded-xl text-xs text-gray-300 overflow-x-auto border border-[#333]">
                 {dbErrorSql}
               </pre>
@@ -278,7 +297,64 @@ ALTER TABLE business_settings DISABLE ROW LEVEL SECURITY;`);
             </div>
           </div>
 
-          <div className="bg-card-dark border border-border-dark p-6 rounded-2xl grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-card-dark border border-border-dark p-6 rounded-2xl grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+            <div>
+              <h3 className="text-sm font-black text-accent uppercase tracking-widest mb-4">Personalización del Menú</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Nombre del Comercio</label>
+                  <input 
+                    type="text" 
+                    value={businessSettings.name} 
+                    onChange={e => setBusinessSettings({...businessSettings, name: e.target.value})} 
+                    placeholder="TU NOMBRE.MENU"
+                    className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-bold" 
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">URL del Logo (Opcional)</label>
+                  <input 
+                    type="text" 
+                    value={businessSettings.logo_url} 
+                    onChange={e => setBusinessSettings({...businessSettings, logo_url: e.target.value})} 
+                    placeholder="https://..."
+                    className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-gray-300 text-sm" 
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Categorías Creadas</label>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {businessSettings.categories.map((cat, i) => (
+                      <span key={i} className="bg-accent/20 text-accent font-bold px-3 py-1 rounded-full text-xs flex items-center gap-2">
+                        {cat}
+                        <button onClick={() => setBusinessSettings({...businessSettings, categories: businessSettings.categories.filter((_, idx) => idx !== i)})} className="hover:text-white"><Trash2 size={12}/></button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      value={newCategory} 
+                      onChange={e => setNewCategory(e.target.value)} 
+                      placeholder="Nueva Categoría"
+                      className="flex-1 bg-[#111] border border-[#333] p-2 rounded-xl focus:border-accent focus:outline-none text-white text-sm" 
+                    />
+                    <button 
+                      onClick={() => {
+                        if (newCategory.trim() && !businessSettings.categories.includes(newCategory.trim())) {
+                          setBusinessSettings({...businessSettings, categories: [...businessSettings.categories, newCategory.trim()]});
+                          setNewCategory('');
+                        }
+                      }}
+                      className="bg-[#333] hover:bg-[#444] px-4 rounded-lg font-bold transition-colors shadow"
+                    >
+                      Sumar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div>
               <h3 className="text-sm font-black text-accent uppercase tracking-widest mb-4">Datos de Cobro (Pagos Online)</h3>
               <div className="space-y-4">
@@ -337,8 +413,9 @@ ALTER TABLE business_settings DISABLE ROW LEVEL SECURITY;`);
                   <div>
                      <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Categoría</label>
                       <select value={product.category} onChange={e => handleProductChange(index, 'category', e.target.value)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-medium">
-                        <option value="Menú">Menú</option>
-                        <option value="Bebidas">Bebidas</option>
+                        {businessSettings.categories.map((cat, i) => (
+                           <option key={i} value={cat}>{cat}</option>
+                        ))}
                       </select>
                   </div>
                 </div>

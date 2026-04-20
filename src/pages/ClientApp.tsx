@@ -43,7 +43,7 @@ export default function ClientApp() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verdict, setVerdict] = useState<{valid: boolean, reason: string} | null>(null);
   const [paymentMode, setPaymentMode] = useState<'select' | 'transfer'>('select');
-  const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '', holder_name: '' });
+  const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '', holder_name: '', name: 'TU NOMBRE.MENU', logo_url: '', categories: ['Menú', 'Bebidas'] });
 
   const fetchHistory = async () => {
     if (!customerName.trim()) {
@@ -407,6 +407,25 @@ export default function ClientApp() {
           { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${orderId}` },
           (payload) => {
             setActiveOrderStatus(payload.new.status);
+            
+            if (payload.new.status === 'ready') {
+              if ('Notification' in window && Notification.permission === 'granted') {
+                 new Notification('¡Tu pedido está listo!', {
+                   body: 'Acércate al mostrador para retirar.'
+                 });
+              }
+              setToastNotification({
+                 title: '¡Tu pedido está listo!',
+                 body: 'Acércate al mostrador para retirar.',
+                 status: 'ready'
+              });
+            } else if (payload.new.status === 'preparing') {
+              setToastNotification({
+                 title: 'Preparando tu pedido',
+                 body: 'El comercio ya está trabajando en lo tuyo.',
+                 status: 'preparing'
+              });
+            }
           }
         )
         .subscribe();
@@ -465,9 +484,14 @@ export default function ClientApp() {
         <header className="bento-card md:col-span-2 flex flex-row items-center justify-between bg-linear-to-r from-card-dark to-[#1a1a1a] h-20">
           <motion.div 
             whileHover={{ scale: 1.05 }}
-            className="text-xl sm:text-2xl font-extrabold tracking-tighter cursor-default"
+            className="flex items-center gap-3 cursor-default"
           >
-            TU NOMBRE<span className="text-accent">.</span>MENU
+            {businessSettings.logo_url ? (
+              <img src={businessSettings.logo_url} alt="Logo" className="h-10 w-auto rounded object-cover" />
+            ) : null}
+            <span className="text-xl sm:text-2xl font-extrabold tracking-tighter">
+               {businessSettings.name}
+            </span>
           </motion.div>
           <div className="hidden lg:flex gap-3">
             {categories.map(cat => (
@@ -607,6 +631,7 @@ export default function ClientApp() {
             <AnimatePresence mode="popLayout" initial={false}>
               {checkoutStep === 'tracking' ? (
                  <motion.div 
+                   key="desktop-tracking"
                    initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
                    className="h-full flex flex-col items-center justify-center text-center gap-6 text-white py-12 px-4"
                  >
@@ -655,6 +680,7 @@ export default function ClientApp() {
                  </motion.div>
               ) : checkoutStep === 'details' ? (
                  <motion.div 
+                   key="desktop-details"
                    initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
                    className="flex flex-col gap-4 py-4"
                  >
@@ -670,6 +696,7 @@ export default function ClientApp() {
                  </motion.div>
               ) : checkoutStep === 'payment' ? (
                  <motion.div 
+                   key="desktop-payment"
                    initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
                    className="flex flex-col gap-4 py-4"
                  >
@@ -817,6 +844,7 @@ export default function ClientApp() {
                  </motion.div>
               ) : cart.length === 0 ? (
                 <motion.div 
+                  key="desktop-empty"
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                   className="h-full flex flex-col items-center justify-center text-center gap-6 text-text-dim py-12"
                 >
