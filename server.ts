@@ -27,7 +27,8 @@ async function startServer() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: "llama-3.2-11b-vision-preview",
+          model: "llama-3.2-90b-vision-preview",
+          max_tokens: 500,
           messages: [
             {
               role: "user",
@@ -73,7 +74,8 @@ Responde ÚNICAMENTE un JSON:
 
       if (!response.ok) {
         console.error("Groq API Error:", data);
-        return res.status(500).json({ error: "La IA de verificación está ocupada o falló. Intenta de nuevo en unos segundos." });
+        const groqMsg = data?.error?.message || JSON.stringify(data);
+        return res.status(500).json({ error: `Fallo Groq: ${groqMsg}` });
       }
 
       let content = data.choices?.[0]?.message?.content;

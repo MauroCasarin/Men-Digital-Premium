@@ -18,7 +18,8 @@ export default async function handler(req, res) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "llama-3.2-11b-vision-preview",
+        model: "llama-3.2-90b-vision-preview",
+        max_tokens: 500,
         messages: [
           {
             role: "user",
@@ -64,7 +65,8 @@ Responde ÚNICAMENTE un JSON:
 
     if (!response.ok) {
       console.error("Groq API Error:", data);
-      return res.status(500).json({ error: "La IA de verificación falló. Intenta de nuevo." });
+      const groqMsg = data?.error?.message || JSON.stringify(data);
+      return res.status(500).json({ error: `Fallo Groq: ${groqMsg}` });
     }
 
     let content = data.choices?.[0]?.message?.content;
