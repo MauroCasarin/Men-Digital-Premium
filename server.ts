@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
@@ -13,10 +14,10 @@ async function startServer() {
   app.post("/api/verify-receipt", async (req, res) => {
     try {
       const { imageBase64, expectedTotal, expectedDate, expectedTime, businessAlias, holderName } = req.body;
-      const apiKey = process.env.MENU;
+      const apiKey = process.env.GROQ_API_KEY || process.env.MENU;
 
       if (!apiKey) {
-        return res.status(500).json({ error: "La API KEY de GROQ (MENU) no está configurada en los Secrets." });
+        return res.status(500).json({ error: "La API KEY de GROQ (GROQ_API_KEY o MENU) no está configurada en los Secrets." });
       }
 
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -64,8 +65,7 @@ Responde ÚNICAMENTE un JSON:
               ]
             }
           ],
-          temperature: 0.1,
-          response_format: { type: "json_object" }
+          temperature: 0.1
         })
       });
 
@@ -76,13 +76,18 @@ Responde ÚNICAMENTE un JSON:
         return res.status(500).json({ error: "La IA de verificación está ocupada o falló. Intenta de nuevo en unos segundos." });
       }
 
-      const content = data.choices?.[0]?.message?.content;
+      let content = data.choices?.[0]?.message?.content;
       
       if (!content) {
         return res.status(500).json({ error: "La IA no devolvió una respuesta válida." });
       }
 
       try {
+        // En caso de que el LLM devuelva el JSON enmarcado por markdown (```json ... ```)
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          content = jsonMatch[0];
+        }
         const parsed = JSON.parse(content);
         res.json(parsed);
       } catch (e) {
