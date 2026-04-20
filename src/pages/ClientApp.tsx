@@ -95,6 +95,7 @@ export default function ClientApp() {
 
   useEffect(() => {
     let alertInterval: NodeJS.Timeout;
+    let removeTimer: NodeJS.Timeout;
     
     // Configurar notificaciones visuales/toast basadas en el cambio de estado
     if (activeOrderStatus && activeOrderStatus !== 'pending') {
@@ -132,14 +133,9 @@ export default function ClientApp() {
           new Notification(`Tu Pedido: ${title}`, { body });
         }
         
-        const removeTimer = setTimeout(() => {
+        removeTimer = setTimeout(() => {
           setToastNotification(null);
         }, 5000); // 5 segundos de popup visual
-        
-        // Cleanup para el timeout del toast
-        if (activeOrderStatus !== 'ready') {
-          return () => clearTimeout(removeTimer);
-        }
       }
     }
     
@@ -156,6 +152,7 @@ export default function ClientApp() {
     }
 
     return () => {
+      if (removeTimer) clearTimeout(removeTimer);
       if (alertInterval) clearInterval(alertInterval);
     };
   }, [activeOrderStatus]);
@@ -163,8 +160,9 @@ export default function ClientApp() {
   // Restoring order listener when mounting if actively shopping in tracking view but lost WS
   useEffect(() => {
     if (activeOrderId && checkoutStep === 'tracking') {
+      const channelId = `order-tracker-${activeOrderId}-${Date.now()}`;
       const channel = supabase
-        .channel(`public:orders:id=eq.${activeOrderId}`)
+        .channel(channelId)
         .on(
           'postgres_changes',
           { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${activeOrderId}` },
