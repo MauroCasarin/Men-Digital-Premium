@@ -35,6 +35,7 @@ DATOS PARA COMPARAR (MUY ESTRICTO):
 5. Titular de la cuenta: ${holderName}
 
 TAREAS:
+- Extrae el ID/Número de Operación o Transacción del comprobante (búscalo como "Número de operación", "ID", "Transacción").
 - Extrae el monto exacto de la transferencia.
 - Extrae la fecha y hora.
 - Verifica que el estado sea exitoso / OK.
@@ -43,6 +44,7 @@ TAREAS:
 Responde ÚNICAMENTE un JSON válido:
 {
   "valid": true o false,
+  "transaction_id": "string",
   "detected_amount": numero,
   "detected_datetime": "fecha y hora",
   "reason": "Motivo breve"
