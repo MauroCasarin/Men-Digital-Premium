@@ -458,51 +458,60 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS categories JSONB DEFAULT 
           </div>
 
           <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mt-8 ml-2">Lista de Productos</h3>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {menuItems.map((product, index) => (
-              <div key={product.id} className="bg-card-dark border border-border-dark p-6 rounded-2xl flex flex-col gap-4 relative">
-                <button onClick={() => handleDeleteProduct(product.id)} className="absolute top-4 right-4 p-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-colors">
-                  <Trash2 size={20} />
-                </button>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Nombre del producto</label>
-                    <input type="text" value={product.name} onChange={e => handleProductChange(index, 'name', e.target.value)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-medium" />
-                  </div>
-                  <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Categoría</label>
-                      <select value={product.category} onChange={e => handleProductChange(index, 'category', e.target.value)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-medium">
-                        {businessSettings.categories.map((cat, i) => (
-                           <option key={i} value={cat}>{cat}</option>
-                        ))}
-                      </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-[1fr_120px] gap-4">
-                  <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Descripción Breve</label>
-                     <input type="text" value={product.description} onChange={e => handleProductChange(index, 'description', e.target.value)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-gray-300 text-sm" />
-                  </div>
-                  <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Precio ($)</label>
-                     <input type="number" step="0.01" value={product.price} onChange={e => handleProductChange(index, 'price', parseFloat(e.target.value) || 0)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-accent font-bold" />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 border-t border-border-dark pt-4 mt-2">
-                  <div className="flex-1">
-                     <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">URL Imagen (Opcional)</label>
-                     <input type="text" placeholder="/ruta-o-https://..." value={product.image || ''} onChange={e => handleProductChange(index, 'image', e.target.value)} className="w-full bg-[#111] border border-[#333] p-2 rounded-lg focus:border-accent focus:outline-none text-gray-400 text-xs" />
-                  </div>
-                  <label className="flex items-center gap-2 cursor-pointer pt-4">
-                    <input type="checkbox" checked={product.is_recommendation || false} onChange={e => handleProductChange(index, 'is_recommendation', e.target.checked)} className="w-5 h-5 accent-accent" />
-                    <span className="font-bold text-sm text-yellow-500">¿Recomendación?</span>
-                  </label>
-                </div>
+          
+          {businessSettings.categories.map((cat) => (
+            <div key={cat} className="mt-8 bg-[#1a1a1a] p-4 rounded-2xl border border-border-dark">
+              <h4 className="text-lg font-bold text-accent mb-4 p-2 bg-accent/10 rounded-lg inline-block">{cat}</h4>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {menuItems.filter(p => p.category === cat).map((product) => {
+                   const idx = menuItems.findIndex(p => p.id === product.id);
+                   return (
+                     <div key={product.id} className="bg-card-dark border border-border-dark p-6 rounded-2xl flex flex-col gap-4 relative">
+                       <button onClick={() => handleDeleteProduct(product.id)} className="absolute top-4 right-4 p-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-colors">
+                         <Trash2 size={20} />
+                       </button>
+                       <div className="grid grid-cols-2 gap-4">
+                         <div>
+                           <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Nombre del producto</label>
+                           <input type="text" value={product.name} onChange={e => handleProductChange(idx, 'name', e.target.value)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-medium" />
+                         </div>
+                         <div>
+                            <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Categoría</label>
+                             <select value={product.category} onChange={e => handleProductChange(idx, 'category', e.target.value)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-medium">
+                               {businessSettings.categories.map((c, i) => (
+                                  <option key={i} value={c}>{c}</option>
+                               ))}
+                             </select>
+                         </div>
+                       </div>
+       
+                       <div className="grid grid-cols-[1fr_120px] gap-4">
+                         <div>
+                            <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Descripción Breve</label>
+                            <input type="text" value={product.description} onChange={e => handleProductChange(idx, 'description', e.target.value)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-gray-300 text-sm" />
+                         </div>
+                         <div>
+                            <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Precio ($)</label>
+                            <input type="number" step="0.01" value={product.price} onChange={e => handleProductChange(idx, 'price', parseFloat(e.target.value) || 0)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-accent font-bold" />
+                         </div>
+                       </div>
+       
+                       <div className="flex items-center gap-4 border-t border-border-dark pt-4 mt-2">
+                         <div className="flex-1">
+                            <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">URL Imagen (Opcional)</label>
+                            <input type="text" placeholder="/ruta-o-https://..." value={product.image || ''} onChange={e => handleProductChange(idx, 'image', e.target.value)} className="w-full bg-[#111] border border-[#333] p-2 rounded-lg focus:border-accent focus:outline-none text-gray-400 text-xs" />
+                         </div>
+                         <label className="flex items-center gap-2 cursor-pointer pt-4">
+                           <input type="checkbox" checked={product.is_recommendation || false} onChange={e => handleProductChange(idx, 'is_recommendation', e.target.checked)} className="w-5 h-5 accent-accent" />
+                           <span className="font-bold text-sm text-yellow-500">¿Recomendación?</span>
+                         </label>
+                       </div>
+                     </div>
+                   );
+                })}
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </motion.div>
       )}
 
