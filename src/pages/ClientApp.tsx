@@ -399,37 +399,6 @@ export default function ClientApp() {
       // We do not clear the cart yet so they don't lose it if they refresh before we're fully tracking, 
       // but essentially they are in tracking mode now.
       
-      // Listen to status updates for this specific order
-      const channel = supabase
-        .channel(`public:orders:id=eq.${orderId}`)
-        .on(
-          'postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${orderId}` },
-          (payload) => {
-            setActiveOrderStatus(payload.new.status);
-            
-            if (payload.new.status === 'ready') {
-              if ('Notification' in window && Notification.permission === 'granted') {
-                 new Notification('¡Tu pedido está listo!', {
-                   body: 'Acércate al mostrador para retirar.'
-                 });
-              }
-              setToastNotification({
-                 title: '¡Tu pedido está listo!',
-                 body: 'Acércate al mostrador para retirar.',
-                 status: 'ready'
-              });
-            } else if (payload.new.status === 'preparing') {
-              setToastNotification({
-                 title: 'Preparando tu pedido',
-                 body: 'El comercio ya está trabajando en lo tuyo.',
-                 status: 'preparing'
-              });
-            }
-          }
-        )
-        .subscribe();
-        
       // Pedir permisos de notificación de escritorio/movil si no se pidieron antes
       if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
         Notification.requestPermission();
