@@ -267,13 +267,20 @@ export default function ClientApp() {
             name: data.name || 'TU NOMBRE.MENU',
             logo_url: data.logo_url || '',
             categories: data.categories || ['Menú', 'Bebidas'],
+            hidden_categories: data.hidden_categories || [],
             theme: data.theme || { accent: '#FFCC00', bg: '#0A0A0A', card: '#141414' }
           });
           if (data.categories && Array.isArray(data.categories) && data.categories.length > 0) {
             // Also override categories state so the navigation pill menu takes custom ones if needed
             // Only if they exist to prevent breaking
             setCategories(data.categories);
-            setActiveCategory(data.categories[0]);
+            
+            const visibleCats = data.categories.filter((c: string) => !(data.hidden_categories || []).includes(c));
+            if (visibleCats.length > 0) {
+                setActiveCategory(visibleCats[0]);
+            } else {
+                setActiveCategory(data.categories[0]);
+            }
           }
         }
       } catch (e) {}
@@ -295,11 +302,17 @@ export default function ClientApp() {
             name: data.name || 'TU NOMBRE.MENU',
             logo_url: data.logo_url || '',
             categories: data.categories || ['Menú', 'Bebidas'],
+            hidden_categories: data.hidden_categories || [],
             theme: data.theme || { accent: '#FFCC00', bg: '#0A0A0A', card: '#141414' }
           });
           if (data.categories && Array.isArray(data.categories) && data.categories.length > 0) {
-            setCategories(data.categories);
-            setActiveCategory(prev => data.categories.includes(prev) ? prev : data.categories[0]);
+             setCategories(data.categories);
+             
+             const visibleCats = data.categories.filter((c: string) => !(data.hidden_categories || []).includes(c));
+             setActiveCategory(prev => {
+                if (visibleCats.includes(prev)) return prev;
+                return visibleCats.length > 0 ? visibleCats[0] : data.categories[0];
+             });
           }
         }
       })
@@ -555,7 +568,7 @@ export default function ClientApp() {
         )}
       </AnimatePresence>
 
-      <div className="w-full max-w-[1400px] flex flex-col md:grid md:grid-cols-[1fr_1fr_360px] md:grid-rows-[auto_1fr_1fr_auto] gap-5">
+      <div className={`w-full max-w-[1400px] flex flex-col md:grid md:grid-cols-[1fr_1fr_360px] md:grid-rows-[auto_1fr_1fr_auto] gap-5 ${(cart.length > 0) || (activeOrderId && activeOrderStatus !== 'completed' && activeOrderStatus !== 'delivered' && !showCartMobile) ? 'pb-24 md:pb-0' : ''}`}>
         
         {/* Header Bento Item */}
         <header className="bento-card md:col-span-2 flex flex-col gap-4 bg-linear-to-r from-card-dark to-[#1a1810] p-6">
@@ -586,7 +599,7 @@ export default function ClientApp() {
           
           {/* Categories - Auto-scaling, just below title */}
           <div className="flex flex-wrap gap-2">
-            {categories.map(cat => (
+            {categories.filter(cat => !(businessSettings.hidden_categories || []).includes(cat)).map(cat => (
               <motion.button
                 key={cat}
                 whileTap={{ scale: 0.95 }}
