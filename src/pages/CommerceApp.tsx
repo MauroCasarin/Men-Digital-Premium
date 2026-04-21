@@ -212,10 +212,7 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS categories JSONB DEFAULT 
     
     // If the commerce puts it as "completed" (Retirado), liberate the name formally
     if (newStatus === 'completed') {
-      const orderToUpdate = orders.find(o => o.id === id);
-      if (orderToUpdate && orderToUpdate.customer_name) {
-        updatePayload.customer_name = `${orderToUpdate.customer_name} (Retirado)`;
-      }
+      updatePayload.customer_name = ''; // "Eliminar nombre de la base de datos del CLIENTE cuando se le entrega el pedido"
     }
 
     const { error } = await supabase
@@ -483,59 +480,66 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS categories JSONB DEFAULT 
 
           <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mt-8 ml-2">Lista de Productos</h3>
           
-          {businessSettings.categories.map((cat) => (
-            <div key={cat} className="mt-8 bg-[#1a1a1a] p-4 rounded-2xl border border-border-dark">
-              <h4 className="text-lg font-bold text-accent mb-4 p-2 bg-accent/10 rounded-lg inline-block">{cat}</h4>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {menuItems.filter(p => p.category === cat).map((product) => {
-                   const idx = menuItems.findIndex(p => p.id === product.id);
-                   return (
-                     <div key={product.id} className="bg-card-dark border border-border-dark p-6 rounded-2xl flex flex-col gap-4 relative">
-                       <button onClick={() => handleDeleteProduct(product.id)} className="absolute top-4 right-4 p-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-colors">
-                         <Trash2 size={20} />
-                       </button>
-                       <div className="grid grid-cols-2 gap-4">
-                         <div>
-                           <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Nombre del producto</label>
-                           <input type="text" value={product.name} onChange={e => handleProductChange(idx, 'name', e.target.value)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-medium" />
+          {businessSettings.categories.map((cat) => {
+            const hasProducts = menuItems.some(p => p.category === cat);
+            // Creamos un estado local temporal para el collapse. Si quisiéramos estado real convendría extraer a un componente
+            return (
+               <details key={cat} className="group mt-8 bg-[#1a1a1a] p-4 rounded-2xl border border-border-dark" open={false}>
+                 <summary className="text-lg font-bold text-accent mb-4 p-2 bg-accent/10 rounded-lg inline-flex items-center cursor-pointer list-none select-none">
+                   {cat}
+                   <ChevronDown size={18} className="ml-2 transition-transform group-open:rotate-180" />
+                 </summary>
+                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
+                  {menuItems.filter(p => p.category === cat).map((product) => {
+                     const idx = menuItems.findIndex(p => p.id === product.id);
+                     return (
+                       <div key={product.id} className="bg-card-dark border border-border-dark p-6 rounded-2xl flex flex-col gap-4 relative">
+                         <button onClick={() => handleDeleteProduct(product.id)} className="absolute top-4 right-4 p-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-colors">
+                           <Trash2 size={20} />
+                         </button>
+                         <div className="grid grid-cols-2 gap-4">
+                           <div>
+                             <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Nombre del producto</label>
+                             <input type="text" value={product.name} onChange={e => handleProductChange(idx, 'name', e.target.value)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-medium" />
+                           </div>
+                           <div>
+                              <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Categoría</label>
+                               <select value={product.category} onChange={e => handleProductChange(idx, 'category', e.target.value)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-medium">
+                                 {businessSettings.categories.map((c, i) => (
+                                    <option key={i} value={c}>{c}</option>
+                                 ))}
+                               </select>
+                           </div>
                          </div>
-                         <div>
-                            <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Categoría</label>
-                             <select value={product.category} onChange={e => handleProductChange(idx, 'category', e.target.value)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-medium">
-                               {businessSettings.categories.map((c, i) => (
-                                  <option key={i} value={c}>{c}</option>
-                               ))}
-                             </select>
+         
+                         <div className="grid grid-cols-[1fr_120px] gap-4">
+                           <div>
+                              <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Descripción Breve</label>
+                              <input type="text" value={product.description} onChange={e => handleProductChange(idx, 'description', e.target.value)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-gray-300 text-sm" />
+                           </div>
+                           <div>
+                              <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Precio ($)</label>
+                              <input type="number" step="0.01" value={product.price} onChange={e => handleProductChange(idx, 'price', parseFloat(e.target.value) || 0)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-accent font-bold" />
+                           </div>
+                         </div>
+         
+                         <div className="flex items-center gap-4 border-t border-border-dark pt-4 mt-2">
+                           <div className="flex-1">
+                              <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">URL Imagen (Opcional)</label>
+                              <input type="text" placeholder="/ruta-o-https://..." value={product.image || ''} onChange={e => handleProductChange(idx, 'image', e.target.value)} className="w-full bg-[#111] border border-[#333] p-2 rounded-lg focus:border-accent focus:outline-none text-gray-400 text-xs" />
+                           </div>
+                           <label className="flex items-center gap-2 cursor-pointer pt-4">
+                             <input type="checkbox" checked={product.is_recommendation || false} onChange={e => handleProductChange(idx, 'is_recommendation', e.target.checked)} className="w-5 h-5 accent-accent" />
+                             <span className="font-bold text-sm text-yellow-500">¿Recomendación?</span>
+                           </label>
                          </div>
                        </div>
-       
-                       <div className="grid grid-cols-[1fr_120px] gap-4">
-                         <div>
-                            <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Descripción Breve</label>
-                            <input type="text" value={product.description} onChange={e => handleProductChange(idx, 'description', e.target.value)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-gray-300 text-sm" />
-                         </div>
-                         <div>
-                            <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Precio ($)</label>
-                            <input type="number" step="0.01" value={product.price} onChange={e => handleProductChange(idx, 'price', parseFloat(e.target.value) || 0)} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-accent font-bold" />
-                         </div>
-                       </div>
-       
-                       <div className="flex items-center gap-4 border-t border-border-dark pt-4 mt-2">
-                         <div className="flex-1">
-                            <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">URL Imagen (Opcional)</label>
-                            <input type="text" placeholder="/ruta-o-https://..." value={product.image || ''} onChange={e => handleProductChange(idx, 'image', e.target.value)} className="w-full bg-[#111] border border-[#333] p-2 rounded-lg focus:border-accent focus:outline-none text-gray-400 text-xs" />
-                         </div>
-                         <label className="flex items-center gap-2 cursor-pointer pt-4">
-                           <input type="checkbox" checked={product.is_recommendation || false} onChange={e => handleProductChange(idx, 'is_recommendation', e.target.checked)} className="w-5 h-5 accent-accent" />
-                           <span className="font-bold text-sm text-yellow-500">¿Recomendación?</span>
-                         </label>
-                       </div>
-                     </div>
-                   );
-                })}
-              </div>
-            </div>
-          ))}
+                     );
+                  })}
+                </div>
+              </details>
+            );
+          })}
         </motion.div>
       )}
 
@@ -624,9 +628,9 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS categories JSONB DEFAULT 
                     {order.status === 'preparing' && (
                       <button
                         onClick={() => updateOrderStatus(order.id, 'ready')}
-                        className="col-span-2 w-full py-3 bg-accent hover:bg-yellow-400 text-black font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+                        className="col-span-2 w-full py-3 bg-accent hover:bg-yellow-400 text-black font-bold rounded-xl flex items-center justify-center gap-2 transition-colors uppercase tracking-widest text-xs"
                       >
-                        <CheckCircle size={18} /> Marcar Lista
+                        <CheckCircle size={18} /> AVISAR PEDIDO LISTO
                       </button>
                     )}
                     {(order.status === 'ready' || order.status === 'on_the_way') && (
@@ -652,15 +656,9 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS categories JSONB DEFAULT 
       </div>
 
       {pastOrders.length > 0 && (
-        <div className="mt-12">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div className="mt-12 mb-8">
+          <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-400 flex items-center gap-2">Historial de Turno</h2>
-            <button 
-              onClick={clearHistory}
-              className="flex items-center gap-2 text-red-500 hover:text-red-400 hover:bg-red-500/10 px-4 py-2 rounded-xl text-sm font-bold transition-colors"
-            >
-              <Trash2 size={16} /> Eliminar historial antiguo
-            </button>
           </div>
           <div className="flex flex-col gap-2">
             {pastOrders.map(order => {
@@ -728,14 +726,27 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS categories JSONB DEFAULT 
         </div>
       )}
 
-      <div className="mt-12 p-6 bento-card bg-[#111] border-t-4 border-accent flex justify-between items-center shadow-2xl">
-        <div>
-          <p className="text-xs text-gray-400 uppercase tracking-widest font-bold">Balance General</p>
-          <h3 className="text-xl font-black text-white mt-1">Total Vendido</h3>
+      <div className="mt-12 p-6 bento-card bg-[#111] border-t-4 border-accent shadow-2xl">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <p className="text-xs text-gray-400 uppercase tracking-widest font-bold">Balance General</p>
+            <h3 className="text-xl font-black text-white mt-1">Total Vendido</h3>
+          </div>
+          <div className="text-3xl font-black text-accent tracking-tighter">
+            ${orders.reduce((acc, order) => acc + order.total, 0).toFixed(2)}
+          </div>
         </div>
-        <div className="text-3xl font-black text-accent tracking-tighter">
-          ${orders.reduce((acc, order) => acc + order.total, 0).toFixed(2)}
-        </div>
+        
+        {pastOrders.length > 0 && (
+          <div className="border-t border-border-dark pt-4 w-full">
+             <button 
+               onClick={clearHistory}
+               className="w-full flex justify-center items-center gap-2 bg-red-500/10 text-red-500 hover:text-red-400 hover:bg-red-500/20 px-4 py-3 rounded-xl text-sm font-bold transition-colors uppercase tracking-widest"
+             >
+               <Trash2 size={16} /> ELIMINAR HISTORIAL ANTIGUO
+             </button>
+          </div>
+        )}
       </div>
 
         </>
