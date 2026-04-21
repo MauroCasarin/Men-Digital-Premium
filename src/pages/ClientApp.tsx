@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import Cropper from 'react-easy-crop';
 import { 
   ShoppingBag, 
   Plus, 
@@ -17,7 +18,8 @@ import {
   ChevronRight,
   CheckCircle,
   UtensilsCrossed,
-  History
+  History,
+  Crop
 } from 'lucide-react';
 import { Product, CartItem, Order } from '../types';
 import { PRODUCTS, WHATSAPP_PHONE } from '../constants';
@@ -40,6 +42,10 @@ export default function ClientApp() {
 
   // New states for payment / AI verification
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verdict, setVerdict] = useState<{valid: boolean, reason: string} | null>(null);
   const [paymentMode, setPaymentMode] = useState<'select' | 'transfer'>('select');
@@ -117,6 +123,24 @@ export default function ClientApp() {
   useEffect(() => {
     let alertInterval: NodeJS.Timeout;
     let removeTimer: NodeJS.Timeout;
+    let wakeLock: any = null;
+
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch (err: any) {
+        console.error(`${err.name}, ${err.message}`);
+      }
+    };
+
+    if (activeOrderStatus && activeOrderStatus !== 'completed') {
+      requestWakeLock();
+    } else if (activeOrderStatus === 'completed') {
+       setCustomerName(''); // Liberar nombre si ya se le entregó
+       localStorage.removeItem('studioMenu_customerName');
+    }
     
     // Configurar notificaciones visuales/toast basadas en el cambio de estado
     if (activeOrderStatus && activeOrderStatus !== 'pending') {
@@ -181,6 +205,9 @@ export default function ClientApp() {
     return () => {
       if (removeTimer) clearTimeout(removeTimer);
       if (alertInterval) clearInterval(alertInterval);
+      if (wakeLock !== null) {
+        wakeLock.release().catch(() => {});
+      }
     };
   }, [activeOrderStatus]);
 
@@ -290,6 +317,45 @@ export default function ClientApp() {
     }
   };
 
+  const onCropComplete = useCallback((croppedArea: any, croppedAreaPixels: any) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<string> => {
+    const image = new Image();
+    image.src = imageSrc;
+    await new Promise((resolve) => (image.onload = resolve));
+    const canvas = document.createElement('canvas');
+    canvas.width = pixelCrop.width;
+    canvas.height = pixelCrop.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+    ctx.drawImage(
+      image,
+      pixelCrop.x,
+      pixelCrop.y,
+      pixelCrop.width,
+      pixelCrop.height,
+      0,
+      0,
+      pixelCrop.width,
+      pixelCrop.height
+    );
+    return canvas.toDataURL('image/jpeg', 0.8);
+  };
+
+  const showCroppedImage = async () => {
+    try {
+      if (imageToCrop && croppedAreaPixels) {
+        const croppedImage = await getCroppedImg(imageToCrop, croppedAreaPixels);
+        setReceiptImage(croppedImage);
+        setImageToCrop(null);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -298,39 +364,9 @@ export default function ClientApp() {
         return;
       }
 
-      setIsVerifying(true);
       const reader = new FileReader();
       reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          const maxDim = 1200;
-
-          if (width > height) {
-            if (width > maxDim) {
-              height *= maxDim / width;
-              width = maxDim;
-            }
-          } else {
-            if (height > maxDim) {
-              width *= maxDim / height;
-              height = maxDim;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-          
-          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
-          setReceiptImage(compressedBase64);
-          setVerdict(null);
-          setIsVerifying(false);
-        };
-        img.src = event.target?.result as string;
+        setImageToCrop(event.target?.result as string);
       };
       reader.readAsDataURL(file);
     }
@@ -374,7 +410,7 @@ export default function ClientApp() {
       });
 
       if (data.valid) {
-         await handleCheckout('Transferencia / Pago Online - VERIFICADO ✅');
+         await handleCheckout('Transferencia / Pago Online - VERIFICADO ✅', data.transaction_id);
       }
     } catch (err: any) {
       alert(err.message);
@@ -384,7 +420,7 @@ export default function ClientApp() {
     }
   };
 
-  const handleCheckout = async (paymentMethod: string) => {
+  const handleCheckout = async (paymentMethod: string, receiptId?: string) => {
     if (cart.length === 0 || !customerName.trim()) return;
 
     setIsProcessing(true);
@@ -413,7 +449,8 @@ export default function ClientApp() {
         total: total,
         status: 'pending',
         payment_method: paymentMethod,
-        customer_name: customerName.trim()
+        customer_name: customerName.trim(),
+        receipt_id: receiptId || null
       }]);
 
       if (error) throw error;
@@ -674,14 +711,16 @@ export default function ClientApp() {
                          <span className="font-bold">Tarjeta de Crédito / Débito presencial</span>
                          <ChevronRight size={18} className="text-text-dim" />
                        </button>
-                       <button 
-                         onClick={() => setPaymentMode('transfer')}
-                         disabled={isProcessing}
-                         className="w-full bg-accent hover:bg-yellow-400 text-black p-4 rounded-xl flex items-center justify-between transition-colors mt-2"
-                       >
-                         <span className="font-bold">Transferencia / MercadoPago (Subir Comprobante)</span>
-                         <ChevronRight size={18} />
-                       </button>
+                       {(businessSettings.alias || businessSettings.cbu) && (
+                         <button 
+                           onClick={() => setPaymentMode('transfer')}
+                           disabled={isProcessing}
+                           className="w-full bg-accent hover:bg-yellow-400 text-black p-4 rounded-xl flex items-center justify-between transition-colors mt-2"
+                         >
+                           <span className="font-bold">Transferencia / MercadoPago (Subir Comprobante)</span>
+                           <ChevronRight size={18} />
+                         </button>
+                       )}
                        {isProcessing && (
                          <div className="flex items-center justify-center gap-2 mt-4 text-accent">
                            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
@@ -944,6 +983,27 @@ export default function ClientApp() {
         </div>
 
       </div>
+
+          {/* Render cropper outside to cover everything when cropping */}
+          {imageToCrop && (
+             <div className="fixed inset-0 z-[100] bg-black flex flex-col">
+               <div className="relative flex-1">
+                 <Cropper
+                   image={imageToCrop}
+                   crop={crop}
+                   zoom={zoom}
+                   aspect={16 / 9}
+                   onCropChange={setCrop}
+                   onCropComplete={onCropComplete}
+                   onZoomChange={setZoom}
+                 />
+               </div>
+               <div className="bg-[#111] p-6 flex justify-between items-center z-[101]">
+                 <button onClick={() => setImageToCrop(null)} className="px-6 py-3 bg-red-500 rounded-xl text-white font-bold">Cancelar</button>
+                 <button onClick={showCroppedImage} className="px-6 py-3 bg-accent rounded-xl text-black font-bold flex gap-2 items-center"><Crop size={18} /> Recortar</button>
+               </div>
+             </div>
+          )}
 
       {/* Cart Mobile Overlay - Re-implementing with Bento styling */}
       <AnimatePresence>

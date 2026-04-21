@@ -1,3 +1,5 @@
+import { createClient } from '@supabase/supabase-js';
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -17,7 +19,7 @@ export default async function handler(req, res) {
     const ai = new GoogleGenAI({ apiKey });
 
     // Limpiar el base64 prefix si existe
-    const base64Data = imageBase64.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
+    const base64Data = imageBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -27,19 +29,17 @@ export default async function handler(req, res) {
           parts: [
             { 
               text: `Analiza este comprobante de pago de transferencia o billetera virtual. 
-DATOS PARA COMPARAR (MUY ESTRICTO):
+DATOS PARA COMPARAR (ESTRICTO):
 1. Monto a pagar: $${expectedTotal}
-2. Fecha requerida: ${expectedDate}
-3. Hora de hoy: ${expectedTime} (El comprobante debe ser de hace minutos).
-4. Cuenta destino para verificar (Alias o CVU): ${businessAlias}
-5. Titular de la cuenta: ${holderName}
+2. Fecha y hora de hoy: ${expectedDate} ${expectedTime}
+3. Cuenta destino para verificar (Alias o CVU): ${businessAlias}
+4. Titular de la cuenta: ${holderName}
 
 TAREAS:
-- Extrae el ID/Número de Operación o Transacción del comprobante (búscalo como "Número de operación", "ID", "Transacción").
-- Extrae el monto exacto de la transferencia.
-- Extrae la fecha y hora.
-- Verifica que el estado sea exitoso / OK.
-- Verifica que el destino sea "${businessAlias}" o el titular "${holderName}".
+- Extrae el ID/Número de Operación o Transacción o Código de Identificación del comprobante. (No debe faltar).
+- Extrae el monto de la transferencia.
+- Verifica que el estado sea Transferencia recibida, exitoso, OK o similar.
+- Verifica destino.
 
 Responde ÚNICAMENTE un JSON válido:
 {
@@ -47,7 +47,7 @@ Responde ÚNICAMENTE un JSON válido:
   "transaction_id": "string",
   "detected_amount": numero,
   "detected_datetime": "fecha y hora",
-  "reason": "Motivo breve"
+  "reason": "Motivo"
 }` 
             },
             { 
@@ -72,6 +72,21 @@ Responde ÚNICAMENTE un JSON válido:
     }
 
     const parsed = JSON.parse(content);
+    
+    if (parsed.valid && parsed.transaction_id) {
+       // Validate against duplicate
+       const supabaseUrl = process.env.VITE_SUPABASE_URL;
+       const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+       if (supabaseUrl && supabaseKey) {
+           const supabase = createClient(supabaseUrl, supabaseKey);
+           const { data, error } = await supabase.from('orders').select('id').eq('receipt_id', parsed.transaction_id.trim());
+           if (data && data.length > 0) {
+              parsed.valid = false;
+              parsed.reason = "Este código de identificación de comprobante ya fue utilizado en otro pedido.";
+           }
+       }
+    }
+
     res.json(parsed);
     
   } catch (error) {
@@ -79,3 +94,4 @@ Responde ÚNICAMENTE un JSON válido:
     res.status(500).json({ error: error.message || "Error interno del servidor Vercel" });
   }
 }
+

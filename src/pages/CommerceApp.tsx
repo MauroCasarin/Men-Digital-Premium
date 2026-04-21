@@ -183,6 +183,30 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS categories JSONB DEFAULT 
     };
   }, []);
 
+  useEffect(() => {
+    let wakeLock: any = null;
+
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator && activeTab === 'orders') {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch (err: any) {
+        console.error(`${err.name}, ${err.message}`);
+      }
+    };
+
+    if (activeTab === 'orders') {
+      requestWakeLock();
+    } else {
+      if (wakeLock) wakeLock.release().catch(() => {});
+    }
+
+    return () => {
+      if (wakeLock) wakeLock.release().catch(() => {});
+    };
+  }, [activeTab]);
+
   const updateOrderStatus = async (id: string, newStatus: string) => {
     let updatePayload: any = { status: newStatus };
     

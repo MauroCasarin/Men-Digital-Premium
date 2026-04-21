@@ -23,4 +23,5 @@ export interface Order {
   payment_method: string;
   customer_name?: string;
   is_paid?: boolean;
+  receipt_id?: string;
 }
