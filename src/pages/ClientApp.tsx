@@ -281,15 +281,41 @@ export default function ClientApp() {
 
     fetchProducts();
     fetchBizSettings();
+
+    // Subscribe to backend changes to sync design and items in real time
+    const channel = supabase
+      .channel('client-config-sync')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'business_settings' }, (payload) => {
+        const data = payload.new as any;
+        if (data) {
+          setBusinessSettings({ 
+            alias: data.alias || '', 
+            cbu: data.cbu || '',
+            holder_name: data.holder_name || '',
+            name: data.name || 'TU NOMBRE.MENU',
+            logo_url: data.logo_url || '',
+            categories: data.categories || ['Menú', 'Bebidas'],
+            theme: data.theme || { accent: '#FFCC00', bg: '#0A0A0A', card: '#141414' }
+          });
+          if (data.categories && Array.isArray(data.categories) && data.categories.length > 0) {
+            setCategories(data.categories);
+            setActiveCategory(prev => data.categories.includes(prev) ? prev : data.categories[0]);
+          }
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items' }, () => {
+        fetchProducts();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => p.category === activeCategory);
   }, [activeCategory, products]);
-
-  const recommendations = useMemo(() => {
-    return products.filter(p => p.is_recommendation === true);
-  }, [products]);
 
   const total = useMemo(() => {
     return cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
@@ -538,9 +564,24 @@ export default function ClientApp() {
               {businessSettings.logo_url && <img src={businessSettings.logo_url} alt="Logo" className="h-10 w-auto rounded object-cover" />}
               <span className="text-xl sm:text-2xl font-extrabold tracking-tighter">{businessSettings.name}</span>
             </motion.div>
-            <button onClick={fetchHistory} className="p-3 bg-[#222] rounded-xl text-white hover:bg-[#333] transition-colors">
-              <History size={20} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={fetchHistory} className="p-3 bg-[#222] rounded-xl text-white hover:bg-[#333] transition-colors relative">
+                <History size={20} />
+              </button>
+              <button 
+                onClick={() => {
+                  if (cart.length > 0) setShowCartMobile(true);
+                }} 
+                className="p-3 bg-transparent border border-[#333] rounded-xl text-white hover:bg-[#222] transition-colors relative md:hidden flex items-center justify-center"
+              >
+                <ShoppingBag size={20} />
+                {cart.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-accent text-black text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold">
+                    {cart.reduce((a, b) => a + b.quantity, 0)}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
           
           {/* Categories - Auto-scaling, just below title */}
@@ -551,7 +592,7 @@ export default function ClientApp() {
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setActiveCategory(cat)}
                 className={`px-4 py-2 rounded-full text-[13px] font-semibold transition-all ${
-                  activeCategory === cat ? 'bg-accent text-black shadow-lg shadow-accent/20' : 'bg-[#222] text-white hover:bg-[#333]'
+                  activeCategory === cat ? 'bg-accent text-black shadow-lg shadow-accent/20' : 'bg-[#222] text-white border border-[#333] hover:bg-[#333]'
                 }`}
               >
                 {cat}
@@ -568,26 +609,39 @@ export default function ClientApp() {
               onClick={() => setSelectedProduct(null)}
             >
               <motion.div
-                className="bg-[#1a1810] border border-[#333] p-4 sm:p-6 rounded-3xl w-full max-w-sm sm:max-w-lg max-h-[85vh] overflow-y-auto relative"
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                className="bg-[#1a1810] border border-[#333] p-4 sm:p-6 rounded-3xl w-full max-w-sm sm:max-w-lg max-h-[85vh] overflow-y-auto relative shadow-2xl"
                 onClick={e => e.stopPropagation()}
               >
-                 <button onClick={() => setSelectedProduct(null)} className="absolute top-4 right-4 text-white p-2 bg-black/50 rounded-full"><X size={20}/></button>
-                 <img src={selectedProduct.image} className="w-full h-48 sm:h-64 object-cover rounded-2xl mb-4" />
+                 <button onClick={() => setSelectedProduct(null)} className="absolute top-4 right-4 text-white p-2 bg-black/50 rounded-full hover:bg-black/80 transition-colors z-10"><X size={20}/></button>
+                 <div className="relative">
+                   <img src={selectedProduct.image} className="w-full h-48 sm:h-64 object-cover rounded-2xl mb-4" referrerPolicy="no-referrer" />
+                   <div className="absolute inset-0 bg-linear-to-t from-[#1a1810] via-transparent to-transparent rounded-2xl" />
+                 </div>
                  <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">{selectedProduct.name}</h2>
                  <p className="text-sm sm:text-base text-gray-400 mb-6">{selectedProduct.description}</p>
                  
                  <div className="flex justify-between items-center mb-6">
                     <span className="text-xl sm:text-2xl font-bold text-accent">${selectedProduct.price.toFixed(2)}</span>
                     <div className="flex items-center gap-4 bg-[#222] p-2 rounded-xl">
-                      <button onClick={() => removeFromCart(Number(selectedProduct.id))} className="p-2 text-red-400"><Minus size={20}/></button>
-                      <span className="font-bold">{cart.find(c => c.product.id === selectedProduct.id)?.quantity || 0}</span>
-                      <button onClick={() => addToCart(selectedProduct)} className="p-2 text-accent"><Plus size={20}/></button>
+                      <button onClick={() => {
+                        removeFromCart(Number(selectedProduct.id));
+                        // If it means it goes back to 0, close the modal immediately according to instructions
+                        const currentQuantity = cart.find(c => c.product.id === selectedProduct.id)?.quantity || 0;
+                        if (currentQuantity <= 1) {
+                          setSelectedProduct(null);
+                        }
+                      }} className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg"><Minus size={20}/></button>
+                      <span className="font-bold text-lg w-4 text-center">{cart.find(c => c.product.id === selectedProduct.id)?.quantity || 0}</span>
+                      <button onClick={() => addToCart(selectedProduct)} className="p-2 text-accent hover:bg-accent/10 rounded-lg"><Plus size={20}/></button>
                     </div>
                  </div>
 
                  <button 
                       onClick={() => setSelectedProduct(null)}
-                      className="w-full bg-accent text-black font-bold py-3 rounded-xl hover:bg-yellow-400 transition-colors"
+                      className="w-full bg-transparent border border-[#444] text-white font-bold py-3 rounded-xl hover:bg-[#222] transition-colors"
                     >
                       Volver al Menú
                  </button>
@@ -601,32 +655,36 @@ export default function ClientApp() {
            <motion.div 
             key={product.id}
             whileHover={{ scale: 1.02 }}
-            className={`bento-card overflow-hidden group min-h-[240px] cursor-pointer ${product.is_recommendation ? 'md:col-span-1 md:row-span-2 bg-[#1a1810]' : ''}`}
-            onClick={() => setSelectedProduct(product)}
+            className={`bento-card overflow-hidden group min-h-[220px] max-h-[240px] cursor-pointer relative md:col-span-1 border border-[#222] shadow-xl`}
+            onClick={() => {
+               // If item isn't in cart yet, automatically add it 1 time to improve flow, or just open the modal.
+               // We just open modal as requested
+               setSelectedProduct(product);
+            }}
           >
             <div className="absolute inset-0">
                <img 
-                src={product.image} 
+                src={product.image || `https://picsum.photos/seed/${product.name}/500/300?blur=2`} 
                 alt={product.name}
                 referrerPolicy="no-referrer"
-                className="w-full h-full object-cover opacity-50 group-hover:scale-105 transition-transform duration-700" 
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
               />
-              <div className="absolute inset-0 bg-linear-to-t from-black to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
             </div>
             
-            <div className="relative z-10 mt-auto p-4">
-              {product.is_recommendation && <span className="inline-block px-2 py-1 bg-accent text-black text-[10px] font-extrabold rounded mb-2">RECOMENDACIÓN</span>}
-              <h3 className="text-lg font-bold text-white group-hover:text-accent transition-colors">{product.name}</h3>
-              <div className="flex justify-between items-center mt-2">
-                <span className="text-md font-bold text-accent">${product.price.toFixed(2)}</span>
-                <span className="text-[10px] bg-black/60 px-2 py-1 rounded-full text-white">{cart.find(c => c.product.id === product.id)?.quantity || 0} en carrito</span>
+            <div className="relative z-10 p-5 flex flex-col justify-end h-full">
+              {product.is_recommendation && <span className="inline-block px-2 py-0.5 bg-accent text-black text-[9px] font-extrabold rounded mb-2 w-max shadow-lg">RECOMENDADO</span>}
+              <h3 className="text-xl font-black text-white group-hover:text-accent transition-colors drop-shadow-md leading-tight">{product.name}</h3>
+              <div className="flex justify-between items-center mt-3">
+                <span className="text-lg font-black text-accent drop-shadow-md">${product.price.toFixed(2)}</span>
+                <span className="text-[10px] bg-black/80 px-3 py-1.5 rounded-lg text-white font-bold backdrop-blur-md border border-white/10 shadow-lg">{cart.find(c => c.product.id === product.id)?.quantity || 0} en carrito</span>
               </div>
             </div>
           </motion.div>
         ))}
 
         {/* Sidebar Cart Bento Item - Restore to original location */}
-        <aside className="bento-card md:row-span-4 bg-[#0F0F0F] flex flex-col p-6 h-full md:max-h-[90vh] sticky top-5 shadow-2xl overflow-hidden min-h-[400px]">
+        <aside className="bento-card md:row-span-4 bg-[#0F0F0F] flex flex-col p-6 h-full md:max-h-[90vh] sticky top-5 shadow-2xl overflow-hidden min-h-[400px] border border-border-dark hidden md:flex">
           <div className="flex items-center justify-between mb-6 pb-4 border-b border-border-dark">
             <h2 className="text-2xl font-extrabold tracking-tight">Tu Pedido</h2>
             {cart.length > 0 && checkoutStep === 'cart' && (
@@ -1354,25 +1412,45 @@ export default function ClientApp() {
         )}
       </AnimatePresence>
 
-      {/* Cart Tooltip Mobile */}
-      {cart.length > 0 && !showCartMobile && (
-        <motion.div 
-          initial={{ y: 100 }}
-          animate={{ y: 0 }}
-          className="fixed bottom-8 left-1/2 -translate-x-1/2 md:hidden z-30 w-full px-6"
-        >
-          <button 
-            onClick={() => setShowCartMobile(true)}
-            className="w-full bg-accent text-black p-5 rounded-2xl shadow-2xl font-black flex items-center justify-between ring-4 ring-accent/20 animate-pulse"
+      {/* Cart Tooltip / Floating Active Order Mobile */}
+      <AnimatePresence>
+        {activeOrderId && activeOrderStatus !== 'completed' && activeOrderStatus !== 'delivered' && checkoutStep !== 'tracking' ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8, y: 50 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 50 }}
+            className="fixed bottom-24 right-4 z-40 md:hidden"
           >
-            <div className="flex items-center gap-3">
-              <ShoppingBag size={24} />
-              <span className="text-sm tracking-widest">VER PEDIDO ({cart.reduce((a, b) => a + b.quantity, 0)})</span>
-            </div>
-            <span className="text-lg tracking-tighter">${total.toFixed(2)}</span>
-          </button>
-        </motion.div>
-      )}
+            <button
+               onClick={() => {
+                 setCheckoutStep('tracking');
+                 setShowCartMobile(true);
+               }}
+               className="bg-orange-500 hover:bg-orange-400 text-white p-4 rounded-full shadow-[0_0_20px_rgba(249,115,22,0.4)] flex items-center justify-center relative overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-white/20 animate-ping rounded-full"></div>
+              <Clock size={24} className="relative z-10" />
+            </button>
+          </motion.div>
+        ) : cart.length > 0 && !showCartMobile && checkoutStep !== 'tracking' && (
+          <motion.div 
+            initial={{ y: 100 }}
+            animate={{ y: 0 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 md:hidden z-30 w-full px-6"
+          >
+            <button 
+              onClick={() => setShowCartMobile(true)}
+              className="w-full bg-accent text-black p-5 rounded-2xl shadow-2xl font-black flex items-center justify-between ring-4 ring-accent/20 animate-pulse"
+            >
+              <div className="flex items-center gap-3">
+                <ShoppingBag size={24} />
+                <span className="text-sm tracking-widest">VER CARRITO ({cart.reduce((a, b) => a + b.quantity, 0)})</span>
+              </div>
+              <span className="text-lg tracking-tighter">${total.toFixed(2)}</span>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* History Modal Overlay */}
       <AnimatePresence>

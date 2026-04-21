@@ -561,55 +561,61 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS theme JSONB DEFAULT '{"ac
             );
           })}
 
-          <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mt-12 ml-2">Diseño y Colores</h3>
-          <div className="mt-4 bg-[#1a1a1a] p-6 rounded-2xl border border-border-dark mb-12">
-             <p className="text-sm text-gray-400 mb-6">Selecciona una paleta de colores para tu menú y este panel:</p>
-             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-               {PALETTES.map((palette, i) => (
-                 <button 
-                   key={i}
-                   onClick={() => setBusinessSettings({...businessSettings, theme: palette.theme})}
-                   className={`p-4 rounded-xl border-2 flex flex-col items-center gap-3 transition-all ${
-                     businessSettings.theme?.accent === palette.theme.accent && businessSettings.theme?.bg === palette.theme.bg ? 'border-accent bg-accent/10' : 'border-[#333] hover:border-gray-500'
-                   }`}
-                 >
-                   <div className="flex gap-2 w-full justify-center">
-                     <div className="w-6 h-6 rounded-full shadow-inner border border-white/10" style={{ backgroundColor: palette.theme.accent }}></div>
-                     <div className="w-6 h-6 rounded-full shadow-inner border border-white/10" style={{ backgroundColor: palette.theme.bg }}></div>
-                     <div className="w-6 h-6 rounded-full shadow-inner border border-white/10" style={{ backgroundColor: palette.theme.card }}></div>
-                   </div>
-                   <span className="font-bold text-xs text-white">{palette.name}</span>
-                 </button>
-               ))}
-             </div>
+          <details className="group mt-12 bg-[#1a1a1a] p-4 rounded-2xl border border-border-dark mb-12" open={false}>
+            <summary className="text-sm font-black text-gray-500 uppercase tracking-widest p-2 bg-black/20 rounded-lg inline-flex items-center cursor-pointer list-none select-none">
+              Diseño y Colores
+              <ChevronDown size={18} className="ml-2 transition-transform group-open:rotate-180" />
+            </summary>
+            
+            <div className="mt-6">
+               <p className="text-sm text-gray-400 mb-6">Selecciona una paleta de colores para tu menú y este panel:</p>
+               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                 {PALETTES.map((palette, i) => (
+                   <button 
+                     key={i}
+                     onClick={() => setBusinessSettings({...businessSettings, theme: palette.theme})}
+                     className={`p-4 rounded-xl border-2 flex flex-col items-center gap-3 transition-all ${
+                       businessSettings.theme?.accent === palette.theme.accent && businessSettings.theme?.bg === palette.theme.bg ? 'border-accent bg-accent/10' : 'border-[#333] hover:border-gray-500'
+                     }`}
+                   >
+                     <div className="flex gap-2 w-full justify-center">
+                       <div className="w-6 h-6 rounded-full shadow-inner border border-white/10" style={{ backgroundColor: palette.theme.accent }}></div>
+                       <div className="w-6 h-6 rounded-full shadow-inner border border-white/10" style={{ backgroundColor: palette.theme.bg }}></div>
+                       <div className="w-6 h-6 rounded-full shadow-inner border border-white/10" style={{ backgroundColor: palette.theme.card }}></div>
+                     </div>
+                     <span className="font-bold text-xs text-white">{palette.name}</span>
+                   </button>
+                 ))}
+               </div>
 
-             <div className="mt-8 pt-6 border-t border-[#333]">
-               <h4 className="text-xs font-bold text-gray-400 block mb-4 uppercase tracking-wider">O crea tus propios colores</h4>
-               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                 <div>
-                   <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Color de Botones (Énfasis)</label>
-                   <div className="flex bg-[#111] border border-[#333] rounded-xl overflow-hidden relative p-1.5 items-center gap-3 focus-within:border-accent transition-colors">
-                     <input type="color" value={businessSettings.theme?.accent || '#FFCC00'} onChange={e => setBusinessSettings({...businessSettings, theme: {...businessSettings.theme, accent: e.target.value}})} className="w-10 h-10 rounded cursor-pointer shrink-0 bg-transparent border-0" />
-                     <span className="text-sm font-mono text-white">{businessSettings.theme?.accent?.toUpperCase() || '#FFCC00'}</span>
+               <div className="mt-8 pt-6 border-t border-[#333]">
+                 <h4 className="text-xs font-bold text-gray-400 block mb-4 uppercase tracking-wider">O crea tus propios colores</h4>
+                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                   <div>
+                     <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Color de Botones (Énfasis)</label>
+                     <div className="flex bg-[#111] border border-[#333] rounded-xl overflow-hidden relative p-1.5 items-center gap-3 focus-within:border-accent transition-colors">
+                       <input type="color" value={businessSettings.theme?.accent || '#FFCC00'} onChange={e => setBusinessSettings({...businessSettings, theme: {...businessSettings.theme, accent: e.target.value}})} className="w-10 h-10 rounded cursor-pointer shrink-0 bg-transparent border-0" />
+                       <span className="text-sm font-mono text-white">{businessSettings.theme?.accent?.toUpperCase() || '#FFCC00'}</span>
+                     </div>
                    </div>
-                 </div>
-                 <div>
-                   <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Fondo Principal</label>
-                   <div className="flex bg-[#111] border border-[#333] rounded-xl overflow-hidden relative p-1.5 items-center gap-3 focus-within:border-accent transition-colors">
-                     <input type="color" value={businessSettings.theme?.bg || '#0A0A0A'} onChange={e => setBusinessSettings({...businessSettings, theme: {...businessSettings.theme, bg: e.target.value}})} className="w-10 h-10 rounded cursor-pointer shrink-0 bg-transparent border-0" />
-                     <span className="text-sm font-mono text-white">{businessSettings.theme?.bg?.toUpperCase() || '#0A0A0A'}</span>
+                   <div>
+                     <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Fondo Principal</label>
+                     <div className="flex bg-[#111] border border-[#333] rounded-xl overflow-hidden relative p-1.5 items-center gap-3 focus-within:border-accent transition-colors">
+                       <input type="color" value={businessSettings.theme?.bg || '#0A0A0A'} onChange={e => setBusinessSettings({...businessSettings, theme: {...businessSettings.theme, bg: e.target.value}})} className="w-10 h-10 rounded cursor-pointer shrink-0 bg-transparent border-0" />
+                       <span className="text-sm font-mono text-white">{businessSettings.theme?.bg?.toUpperCase() || '#0A0A0A'}</span>
+                     </div>
                    </div>
-                 </div>
-                 <div>
-                   <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Fondo de Tarjetas</label>
-                   <div className="flex bg-[#111] border border-[#333] rounded-xl overflow-hidden relative p-1.5 items-center gap-3 focus-within:border-accent transition-colors">
-                     <input type="color" value={businessSettings.theme?.card || '#141414'} onChange={e => setBusinessSettings({...businessSettings, theme: {...businessSettings.theme, card: e.target.value}})} className="w-10 h-10 rounded cursor-pointer shrink-0 bg-transparent border-0" />
-                     <span className="text-sm font-mono text-white">{businessSettings.theme?.card?.toUpperCase() || '#141414'}</span>
+                   <div>
+                     <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Fondo de Tarjetas</label>
+                     <div className="flex bg-[#111] border border-[#333] rounded-xl overflow-hidden relative p-1.5 items-center gap-3 focus-within:border-accent transition-colors">
+                       <input type="color" value={businessSettings.theme?.card || '#141414'} onChange={e => setBusinessSettings({...businessSettings, theme: {...businessSettings.theme, card: e.target.value}})} className="w-10 h-10 rounded cursor-pointer shrink-0 bg-transparent border-0" />
+                       <span className="text-sm font-mono text-white">{businessSettings.theme?.card?.toUpperCase() || '#141414'}</span>
+                     </div>
                    </div>
                  </div>
                </div>
-             </div>
-          </div>
+            </div>
+          </details>
         </motion.div>
       )}
 
