@@ -20,7 +20,7 @@ export default function CommerceApp() {
   const [activeTab, setActiveTab] = useState<'orders' | 'config'>('orders');
   
   const [menuItems, setMenuItems] = useState<Product[]>(PRODUCTS);
-  const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '', holder_name: '', name: 'TU NOMBRE.MENU', logo_url: '', categories: ['Menú', 'Bebidas'], hidden_categories: [] as string[], theme: { accent: '#FFCC00', bg: '#0A0A0A', card: '#141414' } });
+  const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '', holder_name: '', name: 'TU NOMBRE.MENU', logo_url: '', categories: ['Menú', 'Bebidas'], theme: { accent: '#FFCC00', bg: '#0A0A0A', card: '#141414', hidden_categories: [] as string[] } });
   const [dbErrorSql, setDbErrorSql] = useState<string | null>(null);
   const [newCategory, setNewCategory] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -51,8 +51,12 @@ export default function CommerceApp() {
             name: settingsData.name || 'TU NOMBRE.MENU',
             logo_url: settingsData.logo_url || '',
             categories: settingsData.categories || ['Menú', 'Bebidas'],
-            hidden_categories: settingsData.hidden_categories || [],
-            theme: settingsData.theme || { accent: '#FFCC00', bg: '#0A0A0A', card: '#141414' }
+            theme: {
+              accent: settingsData.theme?.accent || '#FFCC00',
+              bg: settingsData.theme?.bg || '#0A0A0A',
+              card: settingsData.theme?.card || '#141414',
+              hidden_categories: settingsData.theme?.hidden_categories || settingsData.hidden_categories || [] 
+            }
           });
         }
         
@@ -77,19 +81,17 @@ CREATE TABLE IF NOT EXISTS business_settings (
   name TEXT,
   logo_url TEXT,
   categories JSONB DEFAULT '["Menú", "Bebidas"]'::jsonb,
-  theme JSONB DEFAULT '{"accent": "#FFCC00", "bg": "#0A0A0A", "card": "#141414"}'::jsonb,
-  hidden_categories JSONB DEFAULT '[]'::jsonb
+  theme JSONB DEFAULT '{"accent": "#FFCC00", "bg": "#0A0A0A", "card": "#141414"}'::jsonb
 );
 
-INSERT INTO business_settings (id, alias, cbu, holder_name, name, logo_url, categories, theme, hidden_categories) VALUES ('config', '', '', '', 'TU NOMBRE.MENU', '', '["Menú", "Bebidas"]'::jsonb, '{"accent": "#FFCC00", "bg": "#0A0A0A", "card": "#141414"}'::jsonb, '[]'::jsonb) ON CONFLICT DO NOTHING;
+INSERT INTO business_settings (id, alias, cbu, holder_name, name, logo_url, categories, theme) VALUES ('config', '', '', '', 'TU NOMBRE.MENU', '', '["Menú", "Bebidas"]'::jsonb, '{"accent": "#FFCC00", "bg": "#0A0A0A", "card": "#141414"}'::jsonb) ON CONFLICT DO NOTHING;
 ALTER TABLE menu_items DISABLE ROW LEVEL SECURITY;
 ALTER TABLE business_settings DISABLE ROW LEVEL SECURITY;`);
         } else if (err.message && (err.message.includes('column') || err.message.includes('No se pudo encontrar la columna'))) {
           setDbErrorSql(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS name TEXT;
 ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS logo_url TEXT;
 ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS categories JSONB DEFAULT '["Menú", "Bebidas"]'::jsonb;
-ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS theme JSONB DEFAULT '{"accent": "#FFCC00", "bg": "#0A0A0A", "card": "#141414"}'::jsonb;
-ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS hidden_categories JSONB DEFAULT '[]'::jsonb;`);
+ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS theme JSONB DEFAULT '{"accent": "#FFCC00", "bg": "#0A0A0A", "card": "#141414"}'::jsonb;`);
         }
       }
     };
@@ -428,12 +430,12 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS hidden_categories JSONB D
                   <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Categorías Creadas (Clic para ocultar/mostrar)</label>
                   <div className="flex flex-wrap gap-2 mb-2">
                     {businessSettings.categories.map((cat, i) => {
-                      const isHidden = businessSettings.hidden_categories?.includes(cat);
+                      const isHidden = businessSettings.theme?.hidden_categories?.includes(cat);
                       return (
                         <span key={i} className={`font-bold px-3 py-1 rounded-full text-xs flex items-center gap-2 cursor-pointer border ${isHidden ? 'bg-[#222] text-gray-500 border-[#333] opacity-60' : 'bg-accent/20 text-accent border-accent/20'}`} onClick={() => {
-                          const hidden = businessSettings.hidden_categories || [];
+                          const hidden = businessSettings.theme?.hidden_categories || [];
                           const newHidden = hidden.includes(cat) ? hidden.filter(h => h !== cat) : [...hidden, cat];
-                          setBusinessSettings({...businessSettings, hidden_categories: newHidden});
+                          setBusinessSettings({...businessSettings, theme: {...businessSettings.theme, hidden_categories: newHidden}});
                         }} title={isHidden ? 'Oculta al cliente. Clic para mostrar.' : 'Visible al cliente. Clic para ocultar.'}>
                           {cat}
                           <button onClick={(e) => { e.stopPropagation(); setBusinessSettings({...businessSettings, categories: businessSettings.categories.filter((_, idx) => idx !== i)}); }} className="hover:text-white"><Trash2 size={12}/></button>

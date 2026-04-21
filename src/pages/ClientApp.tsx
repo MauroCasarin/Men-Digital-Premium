@@ -668,7 +668,7 @@ export default function ClientApp() {
            <motion.div 
             key={product.id}
             whileHover={{ scale: 1.01 }}
-            className={`overflow-hidden group h-[110px] cursor-pointer relative border-b border-[#222] bg-[#0A0A0A] flex items-center p-4 gap-4`}
+            className={`overflow-hidden group h-[110px] cursor-pointer relative border border-[#222] bg-[#0A0A0A] flex items-center p-4 gap-4 rounded-2xl mb-3 shadow-lg`}
             onClick={() => setSelectedProduct(product)}
           >
             {/* Background Image with Blur and Parallax effect */}
