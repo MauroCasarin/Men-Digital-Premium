@@ -49,8 +49,16 @@ export default function ClientApp() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verdict, setVerdict] = useState<{valid: boolean, reason: string} | null>(null);
   const [paymentMode, setPaymentMode] = useState<'select' | 'transfer'>('select');
-  const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '', holder_name: '', name: 'TU NOMBRE.MENU', logo_url: '', categories: ['Menú', 'Bebidas'] });
+  const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '', holder_name: '', name: 'TU NOMBRE.MENU', logo_url: '', categories: ['Menú', 'Bebidas'], theme: { accent: '#FFCC00', bg: '#0A0A0A', card: '#141414' } });
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
+  useEffect(() => {
+    if (businessSettings.theme) {
+      document.documentElement.style.setProperty('--color-accent', businessSettings.theme.accent);
+      document.documentElement.style.setProperty('--color-bg-dark', businessSettings.theme.bg);
+      document.documentElement.style.setProperty('--color-card-dark', businessSettings.theme.card);
+    }
+  }, [businessSettings.theme]);
 
   const fetchHistory = async () => {
     if (!customerName.trim()) {
@@ -251,13 +259,23 @@ export default function ClientApp() {
     const fetchBizSettings = async () => {
       try {
         const { data } = await supabase.from('business_settings').select('*').single();
-        if (data) setBusinessSettings({ 
-          alias: data.alias || '', 
-          cbu: data.cbu || '',
-          holder_name: data.holder_name || '',
-          name: data.name || 'TU NOMBRE.MENU',
-          logo_url: data.logo_url || ''
-        });
+        if (data) {
+          setBusinessSettings({ 
+            alias: data.alias || '', 
+            cbu: data.cbu || '',
+            holder_name: data.holder_name || '',
+            name: data.name || 'TU NOMBRE.MENU',
+            logo_url: data.logo_url || '',
+            categories: data.categories || ['Menú', 'Bebidas'],
+            theme: data.theme || { accent: '#FFCC00', bg: '#0A0A0A', card: '#141414' }
+          });
+          if (data.categories && Array.isArray(data.categories) && data.categories.length > 0) {
+            // Also override categories state so the navigation pill menu takes custom ones if needed
+            // Only if they exist to prevent breaking
+            setCategories(data.categories);
+            setActiveCategory(data.categories[0]);
+          }
+        }
       } catch (e) {}
     };
 
