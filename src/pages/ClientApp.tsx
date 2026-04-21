@@ -654,30 +654,38 @@ export default function ClientApp() {
         {filteredProducts.map((product) => (
            <motion.div 
             key={product.id}
-            whileHover={{ scale: 1.02 }}
-            className={`bento-card overflow-hidden group min-h-[220px] max-h-[240px] cursor-pointer relative md:col-span-1 border border-[#222] shadow-xl`}
-            onClick={() => {
-               // If item isn't in cart yet, automatically add it 1 time to improve flow, or just open the modal.
-               // We just open modal as requested
-               setSelectedProduct(product);
-            }}
+            whileHover={{ scale: 1.01 }}
+            className={`overflow-hidden group h-[110px] cursor-pointer relative border-b border-[#222] bg-[#0A0A0A] flex items-center p-4 gap-4`}
+            onClick={() => setSelectedProduct(product)}
           >
-            <div className="absolute inset-0">
+            {/* Background Image with Blur and Parallax effect */}
+            <div className="absolute inset-0 z-0">
+               <img 
+                src={product.image || `https://picsum.photos/seed/${product.name}/500/300?blur=5`} 
+                alt={product.name}
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover blur-sm scale-110" 
+              />
+              <div className="absolute inset-0 bg-black/70" />
+            </div>
+            
+            <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 relative z-10 border border-white/10 shadow-lg">
                <img 
                 src={product.image || `https://picsum.photos/seed/${product.name}/500/300?blur=2`} 
                 alt={product.name}
                 referrerPolicy="no-referrer"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+                className="w-full h-full object-cover" 
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
             </div>
             
-            <div className="relative z-10 p-5 flex flex-col justify-end h-full">
-              {product.is_recommendation && <span className="inline-block px-2 py-0.5 bg-accent text-black text-[9px] font-extrabold rounded mb-2 w-max shadow-lg">RECOMENDADO</span>}
-              <h3 className="text-xl font-black text-white group-hover:text-accent transition-colors drop-shadow-md leading-tight">{product.name}</h3>
-              <div className="flex justify-between items-center mt-3">
-                <span className="text-lg font-black text-accent drop-shadow-md">${product.price.toFixed(2)}</span>
-                <span className="text-[10px] bg-black/80 px-3 py-1.5 rounded-lg text-white font-bold backdrop-blur-md border border-white/10 shadow-lg">{cart.find(c => c.product.id === product.id)?.quantity || 0} en carrito</span>
+            <div className="flex-1 min-w-0 flex flex-col justify-center relative z-10">
+              <h3 className="text-sm font-bold text-white group-hover:text-accent transition-colors truncate">{product.name}</h3>
+              <p className="text-[10px] text-gray-300 truncate mt-0.5">{product.description}</p>
+              <div className="flex justify-between items-center mt-2">
+                <span className="text-sm font-black text-accent">${product.price.toFixed(2)}</span>
+                <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded-md text-gray-200 font-bold border border-white/10 backdrop-blur-sm">
+                  {cart.find(c => c.product.id === product.id)?.quantity || 0} en carrito
+                </span>
               </div>
             </div>
           </motion.div>
