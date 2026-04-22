@@ -143,9 +143,9 @@ export default function ClientApp() {
       }
     };
 
-    if (activeOrderStatus && activeOrderStatus !== 'completed') {
+    if (activeOrderStatus && activeOrderStatus !== 'completed' && activeOrderStatus !== 'delivered') {
       requestWakeLock();
-    } else if (activeOrderStatus === 'completed') {
+    } else if (activeOrderStatus === 'completed' || activeOrderStatus === 'delivered') {
        setCustomerName(''); // Liberar nombre si ya se le entregó
        localStorage.removeItem('studioMenu_customerName');
     }
@@ -248,8 +248,6 @@ export default function ClientApp() {
         const { data } = await supabase.from('menu_items').select('*').order('category', { ascending: false });
         if (data) {
           setProducts(data as Product[]);
-          const cats = Array.from(new Set((data as Product[]).map(p => p.category)));
-          if (cats.length > 0) setCategories(cats);
         }
       } catch (err) {
         console.warn('Failed to load menu items:', err);
@@ -495,7 +493,7 @@ export default function ClientApp() {
         .from('orders')
         .select('*')
         .ilike('customer_name', customerName.trim()) // Use ilike for case-insensitive match
-        .neq('status', 'completed');
+        .in('status', ['pending', 'preparing', 'ready', 'on_the_way']);
         
       if (fetchError) throw fetchError;
       
@@ -534,9 +532,9 @@ export default function ClientApp() {
         Notification.requestPermission();
       }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Hubo un error al procesar el pedido. Comprueba la conexión a Supabase.');
+      alert('Hubo un error al procesar el pedido. Comprueba la conexión a Supabase o revisa que hayas creado la tabla "orders": ' + error.message);
     } finally {
       setIsProcessing(false);
     }

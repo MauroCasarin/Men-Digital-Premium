@@ -64,7 +64,9 @@ export default function CommerceApp() {
         setDbErrorSql(null);
       } catch (err: any) {
         if (err.code === '42P01') { 
-          setDbErrorSql(`CREATE TABLE IF NOT EXISTS menu_items (
+          setDbErrorSql(`-- TABLAS DE LA APLICACIÓN
+
+CREATE TABLE IF NOT EXISTS menu_items (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT NOT NULL,
@@ -82,17 +84,38 @@ CREATE TABLE IF NOT EXISTS business_settings (
   name TEXT,
   logo_url TEXT,
   categories JSONB DEFAULT '["Menú", "Bebidas"]'::jsonb,
-  theme JSONB DEFAULT '{"accent": "#FFCC00", "bg": "#0A0A0A", "card": "#141414"}'::jsonb
+  theme JSONB DEFAULT '{"accent": "#FFCC00", "bg": "#0A0A0A", "card": "#141414", "hidden_categories": []}'::jsonb
 );
 
-INSERT INTO business_settings (id, alias, cbu, holder_name, name, logo_url, categories, theme) VALUES ('config', '', '', '', 'TU NOMBRE.MENU', '', '["Menú", "Bebidas"]'::jsonb, '{"accent": "#FFCC00", "bg": "#0A0A0A", "card": "#141414"}'::jsonb) ON CONFLICT DO NOTHING;
+CREATE TABLE IF NOT EXISTS orders (
+  id TEXT PRIMARY KEY,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+  items JSONB NOT NULL,
+  total NUMERIC NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  payment_method TEXT NOT NULL,
+  customer_name TEXT,
+  is_paid BOOLEAN DEFAULT false,
+  receipt_id TEXT,
+  customer_cuit TEXT
+);
+
+INSERT INTO business_settings (id, alias, cbu, holder_name, name, logo_url, categories, theme) VALUES ('config', '', '', '', 'TU NOMBRE.MENU', '', '["Menú", "Bebidas"]'::jsonb, '{"accent": "#FFCC00", "bg": "#0A0A0A", "card": "#141414", "hidden_categories": []}'::jsonb) ON CONFLICT DO NOTHING;
+
 ALTER TABLE menu_items DISABLE ROW LEVEL SECURITY;
-ALTER TABLE business_settings DISABLE ROW LEVEL SECURITY;`);
+ALTER TABLE business_settings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE orders DISABLE ROW LEVEL SECURITY;
+
+-- Activar Realtime para los pedidos
+DROP PUBLICATION IF EXISTS supabase_realtime CASCADE;
+CREATE PUBLICATION supabase_realtime;
+ALTER PUBLICATION supabase_realtime ADD TABLE orders;`);
         } else if (err.message && (err.message.includes('column') || err.message.includes('No se pudo encontrar la columna'))) {
           setDbErrorSql(`ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS name TEXT;
 ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS logo_url TEXT;
 ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS categories JSONB DEFAULT '["Menú", "Bebidas"]'::jsonb;
-ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS theme JSONB DEFAULT '{"accent": "#FFCC00", "bg": "#0A0A0A", "card": "#141414"}'::jsonb;`);
+ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS theme JSONB DEFAULT '{"accent": "#FFCC00", "bg": "#0A0A0A", "card": "#141414", "hidden_categories": []}'::jsonb;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
         }
       }
     };
@@ -235,11 +258,6 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS theme JSONB DEFAULT '{"ac
 
   const updateOrderStatus = async (id: string, newStatus: string) => {
     let updatePayload: any = { status: newStatus };
-    
-    // If the commerce puts it as "completed" (Retirado), liberate the name formally
-    if (newStatus === 'completed') {
-      updatePayload.customer_name = ''; // "Eliminar nombre de la base de datos del CLIENTE cuando se le entrega el pedido"
-    }
 
     const { error } = await supabase
       .from('orders')
@@ -810,18 +828,6 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS theme JSONB DEFAULT '{"ac
                               </div>
                             ))}
                           </div>
-                          
-                          {order.status === 'delivered' && (
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                updateOrderStatus(order.id, 'completed');
-                              }}
-                              className="w-full py-3 bg-[#222] hover:bg-white hover:text-black font-bold uppercase tracking-widest text-xs rounded-xl shadow transition-colors border border-border-dark"
-                            >
-                              El Cliente Se Retiró (Liberar Nombre)
-                            </button>
-                          )}
                         </div>
                       </motion.div>
                     )}
