@@ -238,7 +238,7 @@ export default function ClientApp() {
     }
   }, [activeOrderId, checkoutStep]);
 
-  const [products, setProducts] = useState<Product[]>(PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<string[]>(['Menú', 'Bebidas']);
 
   useEffect(() => {
@@ -246,13 +246,13 @@ export default function ClientApp() {
     const fetchProducts = async () => {
       try {
         const { data } = await supabase.from('menu_items').select('*').order('category', { ascending: false });
-        if (data && data.length > 0) {
+        if (data) {
           setProducts(data as Product[]);
           const cats = Array.from(new Set((data as Product[]).map(p => p.category)));
           if (cats.length > 0) setCategories(cats);
         }
       } catch (err) {
-        console.warn('Using fallback products, menu_items table may not exist yet.');
+        console.warn('Failed to load menu items:', err);
       }
     };
 
@@ -475,7 +475,7 @@ export default function ClientApp() {
       });
 
       if (data.valid) {
-         await handleCheckout('Transferencia / Pago Online - VERIFICADO ✅', data.transaction_id);
+         await handleCheckout('Transferencia / Pago Online - VERIFICADO ✅', data.transaction_id, data.issuer_cuit_cuil);
       }
     } catch (err: any) {
       alert(err.message);
@@ -485,7 +485,7 @@ export default function ClientApp() {
     }
   };
 
-  const handleCheckout = async (paymentMethod: string, receiptId?: string) => {
+  const handleCheckout = async (paymentMethod: string, receiptId?: string, cuit?: string) => {
     if (cart.length === 0 || !customerName.trim()) return;
 
     setIsProcessing(true);
@@ -515,7 +515,8 @@ export default function ClientApp() {
         status: 'pending',
         payment_method: paymentMethod,
         customer_name: customerName.trim(),
-        receipt_id: receiptId || null
+        receipt_id: receiptId || null,
+        customer_cuit: cuit || null
       }]);
 
       if (error) throw error;
@@ -681,15 +682,11 @@ export default function ClientApp() {
             onClick={() => setSelectedProduct(product)}
           >
             {/* Background Image with Blur and Parallax effect */}
-            <div className="absolute inset-0 z-0">
-               <img 
-                src={product.image || `https://picsum.photos/seed/${product.name}/500/300?blur=5`} 
-                alt={product.name}
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover blur-sm scale-110" 
-              />
-              <div className="absolute inset-0 bg-black/70" />
-            </div>
+            <div 
+              className="absolute inset-0 z-0 bg-cover bg-fixed opacity-30 saturate-50"
+              style={{ backgroundImage: `url(${product.image || `https://picsum.photos/seed/${product.name}/500/300?blur=5`})`, backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }} 
+            />
+            <div className="absolute inset-0 bg-black/70 mix-blend-multiply" />
             
             <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 relative z-10 border border-white/10 shadow-lg">
                <img 

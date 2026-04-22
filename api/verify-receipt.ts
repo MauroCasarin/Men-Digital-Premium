@@ -28,26 +28,27 @@ export default async function handler(req, res) {
           role: "user",
           parts: [
             { 
-              text: `Analiza este comprobante de pago de transferencia o billetera virtual. 
+              text: `Analiza este comprobante de pago de transferencia o billetera virtual de Argentina. 
 DATOS PARA COMPARAR (ESTRICTO):
 1. Monto a pagar: $${expectedTotal}
 2. Fecha y hora de hoy: ${expectedDate} ${expectedTime}
-3. Cuenta destino para verificar (Alias o CVU): ${businessAlias}
-4. Titular de la cuenta: ${holderName}
+3. Cuenta destino para verificar (Alias o CVU/CBU): ${businessAlias}
+4. Titular de la cuenta destino: ${holderName}
 
-TAREAS:
-- Extrae el ID/Número de Operación o Transacción o Código de Identificación del comprobante. (No debe faltar).
-- Extrae el monto de la transferencia.
-- Verifica que el estado sea Transferencia recibida, exitoso, OK o similar.
-- Verifica destino.
+TAREAS EXCLUYENTES:
+- Extrae el ID/Número de Operación o Transacción (ej. 155262852608 o 44642124).
+- Extrae el CUIT/CUIL del emisor (ej. 20-24788214-7 o 27266872637).
+- Verifica estrictamente que el Estado del Pago sea "Transferencia recibida" o "Comprobante de transferencia". Si dice "Transferencia enviada", "En proceso", o no lo especifica claramente como recibida/comprobante, es inválido.
+- Extrae el monto de la transferencia y verifica destino.
 
-Responde ÚNICAMENTE un JSON válido:
+Responde ÚNICAMENTE un JSON válido con esta estructura:
 {
   "valid": true o false,
   "transaction_id": "string",
+  "issuer_cuit_cuil": "string (o null si no lo encuentra)",
   "detected_amount": numero,
   "detected_datetime": "fecha y hora",
-  "reason": "Motivo"
+  "reason": "Explicación breve de por qué es válido o inválido"
 }` 
             },
             { 

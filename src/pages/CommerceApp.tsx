@@ -19,7 +19,7 @@ export default function CommerceApp() {
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'orders' | 'config'>('orders');
   
-  const [menuItems, setMenuItems] = useState<Product[]>(PRODUCTS);
+  const [menuItems, setMenuItems] = useState<Product[]>([]);
   const [deletedProductIds, setDeletedProductIds] = useState<string[]>([]);
   const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '', holder_name: '', name: 'TU NOMBRE.MENU', logo_url: '', categories: ['Menú', 'Bebidas'], theme: { accent: '#FFCC00', bg: '#0A0A0A', card: '#141414', hidden_categories: [] as string[] } });
   const [dbErrorSql, setDbErrorSql] = useState<string | null>(null);
@@ -38,7 +38,7 @@ export default function CommerceApp() {
     const fetchConfig = async () => {
       try {
         const { data: menuData } = await supabase.from('menu_items').select('*').order('category', { ascending: false });
-        if (menuData && menuData.length > 0) setMenuItems(menuData as Product[]);
+        if (menuData) setMenuItems(menuData as Product[]);
         
         const { data: settingsData, error } = await supabase.from('business_settings').select('*').single();
         
@@ -674,11 +674,16 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS theme JSONB DEFAULT '{"ac
                       )}
                     </div>
                     {/* Payment Status Indicator */}
-                    <div className="flex items-center gap-2 mt-2">
-                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${order.is_paid ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
-                          {order.is_paid ? 'PAGADO ✅' : 'PENDIENTE ⏳'}
-                       </span>
-                       <span className="text-[10px] text-gray-400 font-bold uppercase">{order.payment_method}</span>
+                    <div className="flex flex-col gap-1 mt-2">
+                       <div className="flex items-center gap-2">
+                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${order.is_paid ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
+                            {order.is_paid ? 'PAGADO ✅' : 'PENDIENTE ⏳'}
+                         </span>
+                         <span className="text-[10px] text-gray-400 font-bold uppercase">{order.payment_method}</span>
+                       </div>
+                       {order.customer_cuit && (
+                         <span className="text-[10px] text-gray-400 font-bold">CUIT/CUIL: {order.customer_cuit}</span>
+                       )}
                     </div>
                     <p className="text-xs text-text-dim mt-2">
                       {new Date(order.created_at).toLocaleString()}
@@ -792,6 +797,11 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS theme JSONB DEFAULT '{"ac
                         exit={{ height: 0, opacity: 0 }}
                       >
                         <div className="px-4 pb-4 pt-2 border-t border-border-dark mt-2" onClick={e => e.stopPropagation()}>
+                          <div className="flex flex-col gap-1 mb-4">
+                             {order.customer_cuit && (
+                               <span className="text-[10px] text-gray-400 font-bold">CUIT/CUIL: {order.customer_cuit}</span>
+                             )}
+                          </div>
                           <div className="space-y-2 mb-4">
                             {order.items.map((item, idx) => (
                               <div key={idx} className="flex justify-between text-sm">
