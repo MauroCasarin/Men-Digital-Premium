@@ -348,11 +348,11 @@ export default function ClientApp() {
     });
   };
 
-  const removeFromCart = (id: number) => {
+  const removeFromCart = (id: string | number) => {
     setCart(prev => prev.filter(item => item.product.id !== id));
   };
 
-  const updateQuantity = (id: number, delta: number) => {
+  const updateQuantity = (id: string | number, delta: number) => {
     setCart(prev => prev.map(item => {
       if (item.product.id === id) {
         const newQty = Math.max(1, item.quantity + delta);
@@ -362,7 +362,7 @@ export default function ClientApp() {
     }));
   };
 
-  const updateInstructions = (id: number, instructions: string) => {
+  const updateInstructions = (id: string | number, instructions: string) => {
     setCart(prev => prev.map(item => 
       item.product.id === id ? { ...item, instructions } : item
     ));
@@ -640,11 +640,12 @@ export default function ClientApp() {
                     <span className="text-xl sm:text-2xl font-bold text-accent">${selectedProduct.price.toFixed(2)}</span>
                     <div className="flex items-center gap-4 bg-[#222] p-2 rounded-xl">
                       <button onClick={() => {
-                        removeFromCart(Number(selectedProduct.id));
-                        // If it means it goes back to 0, close the modal immediately according to instructions
                         const currentQuantity = cart.find(c => c.product.id === selectedProduct.id)?.quantity || 0;
-                        if (currentQuantity <= 1) {
-                          setSelectedProduct(null);
+                        if (currentQuantity > 1) {
+                            updateQuantity(selectedProduct.id, -1);
+                        } else if (currentQuantity === 1) {
+                            removeFromCart(selectedProduct.id);
+                            setSelectedProduct(null); // Close modal when completely removed
                         }
                       }} className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg"><Minus size={20}/></button>
                       <span className="font-bold text-lg w-4 text-center">{cart.find(c => c.product.id === selectedProduct.id)?.quantity || 0}</span>
@@ -1054,30 +1055,7 @@ export default function ClientApp() {
           </div>
         </aside>
 
-        {/* Mobile items remaining (Full list for mobile if not empty) */}
-        <div className="md:hidden space-y-4 mt-4">
-           {filteredProducts.filter(p => !p.is_recommendation).map((product) => (
-              <motion.div 
-                key={product.id} 
-                whileTap={{ scale: 0.98 }}
-                className="bento-card flex flex-row items-center gap-4 bg-card-dark/50"
-              >
-                 <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0">
-                    <img src={product.image} className="w-full h-full object-cover" alt="" />
-                 </div>
-                 <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-sm truncate">{product.name}</h3>
-                    <p className="text-accent font-bold">${product.price.toFixed(2)}</p>
-                 </div>
-                 <button 
-                  onClick={() => addToCart(product)} 
-                  className="w-10 h-10 rounded-full bg-accent text-black font-extrabold flex items-center justify-center shadow-lg"
-                 >
-                  +
-                 </button>
-              </motion.div>
-           ))}
-        </div>
+
 
       </div>
 
