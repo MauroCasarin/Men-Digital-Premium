@@ -812,7 +812,7 @@ export default function ClientApp() {
                          <span className="font-bold">Tarjeta de Crédito / Débito presencial</span>
                          <ChevronRight size={18} className="text-text-dim" />
                        </button>
-                       {(businessSettings.alias || businessSettings.cbu) && (
+                       {!businessSettings.theme?.online_payments_hidden && (businessSettings.alias || businessSettings.cbu) && (
                          <button 
                            onClick={() => setPaymentMode('transfer')}
                            disabled={isProcessing}
@@ -1218,14 +1218,16 @@ export default function ClientApp() {
                             <span className="font-bold">Tarjeta presencial</span>
                             <ChevronRight size={18} className="text-text-dim" />
                           </button>
-                          <button 
-                            onClick={() => setPaymentMode('transfer')}
-                            disabled={isProcessing}
-                            className="w-full bg-accent text-black p-5 rounded-2xl flex items-center justify-between transition-all active:scale-[0.98] shadow-xl shadow-accent/10"
-                          >
-                            <span className="font-black">TRANSFERENCIA / MP</span>
-                            <ChevronRight size={18} />
-                          </button>
+                          {!businessSettings.theme?.online_payments_hidden && (businessSettings.alias || businessSettings.cbu) && (
+                            <button 
+                              onClick={() => setPaymentMode('transfer')}
+                              disabled={isProcessing}
+                              className="w-full bg-accent text-black p-5 rounded-2xl flex items-center justify-between transition-all active:scale-[0.98] shadow-xl shadow-accent/10"
+                            >
+                              <span className="font-black">TRANSFERENCIA / MP</span>
+                              <ChevronRight size={18} />
+                            </button>
+                          )}
                           {isProcessing && (
                             <div className="w-full py-5 text-center text-accent font-bold animate-pulse flex items-center justify-center gap-2">
                                <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>

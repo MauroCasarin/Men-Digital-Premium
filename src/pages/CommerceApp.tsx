@@ -297,15 +297,32 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
   const activeOrders = orders.filter(o => !['delivered', 'completed'].includes(o.status));
   const pastOrders = orders.filter(o => ['delivered', 'completed'].includes(o.status));
 
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newProductData, setNewProductData] = useState<Partial<Product>>({ name: '', description: '', price: 0, category: 'Menú', image: '', is_recommendation: false });
+
   const handleProductChange = (index: number, field: keyof Product, value: any) => {
     const newItems = [...menuItems];
     newItems[index] = { ...newItems[index], [field]: value };
     setMenuItems(newItems);
   };
 
-  const handleAddProduct = () => {
+  const submitNewProduct = () => {
+    if (!newProductData.name || newProductData.price === undefined) {
+      alert('Por favor completa al menos el nombre y precio del producto.');
+      return;
+    }
     const newId = `new-${Math.random().toString(36).substr(2, 6)}`;
-    setMenuItems([{ id: newId, name: '', description: '', price: 0, category: 'Menú', image: '', is_recommendation: false }, ...menuItems]);
+    setMenuItems([{ 
+      id: newId, 
+      name: newProductData.name || '', 
+      description: newProductData.description || '', 
+      price: Number(newProductData.price) || 0, 
+      category: newProductData.category || (businessSettings.categories.length > 0 ? businessSettings.categories[0] : 'Menú'), 
+      image: newProductData.image || '', 
+      is_recommendation: newProductData.is_recommendation || false 
+    }, ...menuItems]);
+    setIsAddModalOpen(false);
+    setNewProductData({ name: '', description: '', price: 0, category: businessSettings.categories.length > 0 ? businessSettings.categories[0] : 'Menú', image: '', is_recommendation: false });
   };
 
   const handleDeleteProduct = (id: string | number) => {
@@ -414,16 +431,19 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
             </div>
           )}
 
-          <div className="flex justify-between items-center bg-card-dark p-6 rounded-2xl border border-border-dark">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-card-dark p-6 rounded-2xl border border-border-dark gap-6">
             <div>
               <h2 className="text-xl font-bold mb-1">Editor del Menú & Negocio</h2>
               <p className="text-sm text-text-dim"> Suma más categorías según productos, para cobro on line agrega tus datos.</p>
             </div>
-            <div className="flex gap-3">
-              <button onClick={handleAddProduct} className="flex items-center gap-2 bg-[#333] hover:bg-[#444] text-white px-4 py-2 rounded-xl font-bold transition-colors">
+            <div className="flex flex-col w-full md:w-64 gap-3">
+              <button onClick={() => {
+                setNewProductData({ name: '', description: '', price: 0, category: businessSettings.categories.length > 0 ? businessSettings.categories[0] : 'Menú', image: '', is_recommendation: false });
+                setIsAddModalOpen(true);
+              }} className="flex items-center justify-center gap-2 bg-[#333] hover:bg-[#444] text-white px-6 py-3 rounded-xl font-bold transition-colors w-full">
                 <Plus size={18} /> Agregar
               </button>
-              <button disabled={isSaving} onClick={saveMenuConfig} className="flex items-center gap-2 bg-accent hover:bg-yellow-400 text-black px-6 py-2 rounded-xl font-bold transition-colors">
+              <button disabled={isSaving} onClick={saveMenuConfig} className="flex items-center justify-center gap-2 bg-accent hover:bg-yellow-400 text-black px-6 py-3 rounded-xl font-bold transition-colors w-full">
                 <Save size={18} /> {isSaving ? 'Guardando...' : 'Guardar Todo'}
               </button>
             </div>
@@ -495,8 +515,19 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
             </div>
 
             <div>
-              <h3 className="text-sm font-black text-accent uppercase tracking-widest mb-4">Datos de Cobro (Pagos Online)</h3>
-              <div className="space-y-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-sm font-black text-accent uppercase tracking-widest">Datos de Cobro (Pagos Online)</h3>
+                <label className="flex items-center gap-2 cursor-pointer bg-[#222] px-3 py-1.5 rounded-full border border-[#333]">
+                  <input 
+                    type="checkbox" 
+                    className="accent-accent"
+                    checked={!businessSettings.theme?.online_payments_hidden}
+                    onChange={(e) => setBusinessSettings({...businessSettings, theme: {...businessSettings.theme, online_payments_hidden: !e.target.checked}})}
+                  />
+                  <span className="text-xs font-bold text-gray-300">Mostrar al cliente</span>
+                </label>
+              </div>
+              <div className={`space-y-4 ${businessSettings.theme?.online_payments_hidden ? 'opacity-50 grayscale pointer-events-none' : ''}`}>
                 <div>
                   <label className="text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Nombre del Titular</label>
                   <input 
@@ -861,6 +892,75 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {isAddModalOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 50 }} 
+              animate={{ scale: 1, y: 0 }} 
+              exit={{ scale: 0.9, y: 50 }} 
+              className="bg-card-dark border border-border-dark p-6 rounded-3xl w-full max-w-md shadow-2xl relative max-h-[90vh] flex flex-col"
+            >
+              <button 
+                onClick={() => setIsAddModalOpen(false)}
+                className="absolute top-4 right-4 text-gray-500 hover:text-white bg-[#111] p-2 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+              
+              <h2 className="text-2xl font-black text-white mb-6 uppercase tracking-tighter">Nuevo Producto</h2>
+              
+              <div className="space-y-4 overflow-y-auto flex-1 pr-2 custom-scrollbar">
+                <div>
+                  <label className="text-xs font-bold text-gray-500 block mb-1 uppercase">Nombre</label>
+                  <input type="text" value={newProductData.name} onChange={e => setNewProductData({...newProductData, name: e.target.value})} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-bold" placeholder="Ej: Hamburguesa Simple" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 block mb-1 uppercase">Descripción</label>
+                  <input type="text" value={newProductData.description} onChange={e => setNewProductData({...newProductData, description: e.target.value})} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white text-sm" placeholder="Ej: Medallón de carne con queso..." />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 block mb-1 uppercase">Precio</label>
+                    <input type="number" value={newProductData.price || ''} onChange={e => setNewProductData({...newProductData, price: Number(e.target.value)})} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-accent font-bold" placeholder="0" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 block mb-1 uppercase">Categoría</label>
+                    <select value={newProductData.category} onChange={e => setNewProductData({...newProductData, category: e.target.value})} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-bold">
+                      {(businessSettings.categories && businessSettings.categories.length > 0 ? businessSettings.categories : ['Menú', 'Bebidas']).map((cat: string) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 block mb-1 uppercase">URL Imagen (Opcional)</label>
+                  <input type="text" value={newProductData.image} onChange={e => setNewProductData({...newProductData, image: e.target.value})} className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-gray-300 text-sm" placeholder="https://..." />
+                </div>
+                <label className="flex items-center gap-3 cursor-pointer bg-[#111] p-4 rounded-xl border border-[#333] mt-2">
+                  <input type="checkbox" checked={newProductData.is_recommendation || false} onChange={e => setNewProductData({...newProductData, is_recommendation: e.target.checked})} className="accent-accent w-5 h-5" />
+                  <span className="text-sm font-bold text-white">Marcar como Destacado ⭐</span>
+                </label>
+              </div>
+
+              <div className="pt-6 mt-4 border-t border-[#333]">
+                <button 
+                  onClick={submitNewProduct}
+                  className="w-full bg-accent hover:bg-yellow-400 text-black py-4 rounded-xl font-bold uppercase tracking-widest transition-colors flex justify-center items-center gap-2"
+                >
+                  <Plus size={20} /> AGREGAR A LA LISTA
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
         </>
       )}
