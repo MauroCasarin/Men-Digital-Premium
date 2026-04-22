@@ -147,7 +147,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
     };
   })();
 
-  const playNewOrderSound = () => {
+  const playNewOrderSound = (previewTheme?: any) => {
     try {
       const audioCtx = getCommerceAudioContext();
       if (!audioCtx) return;
@@ -157,15 +157,22 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
         audioCtx.resume().catch(e => console.warn(e));
       }
       
-      const playChime = (freq: number, startTime: number) => {
+      const theme = previewTheme || businessSettings.theme || {};
+      const sType = theme.sound_type || 'sine';
+      const sVol = theme.sound_volume !== undefined ? theme.sound_volume : 0.5;
+      const freqMult = theme.sound_freq_mult || 1.0;
+      
+      if (sVol <= 0) return; // Muted
+
+      const playChime = (baseFreq: number, startTime: number) => {
         const oscillator = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
         oscillator.connect(gainNode);
         gainNode.connect(audioCtx.destination);
-        oscillator.type = 'sine'; // Sonido dulce y resonante
-        oscillator.frequency.setValueAtTime(freq, startTime);
+        oscillator.type = sType as OscillatorType;
+        oscillator.frequency.setValueAtTime(baseFreq * freqMult, startTime);
         gainNode.gain.setValueAtTime(0, startTime);
-        gainNode.gain.linearRampToValueAtTime(0.5, startTime + 0.1);
+        gainNode.gain.linearRampToValueAtTime(sVol, startTime + 0.1);
         gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 1.0);
         oscillator.start(startTime);
         oscillator.stop(startTime + 1.0);
@@ -684,6 +691,71 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
                    </div>
                  </div>
                </div>
+                <div className="mt-8 pt-6 border-t border-[#333]">
+                 <h4 className="text-xs font-bold text-gray-400 block mb-4 uppercase tracking-wider">Sonido de Notificaciones</h4>
+                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                   <div>
+                     <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Tipo de Sonido</label>
+                     <select 
+                       value={businessSettings.theme?.sound_type || 'sine'} 
+                       onChange={(e) => {
+                         const updated = {...businessSettings, theme: {...businessSettings.theme, sound_type: e.target.value}};
+                         setBusinessSettings(updated);
+                         playNewOrderSound(updated.theme);
+                       }}
+                       className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-bold"
+                     >
+                       <option value="sine">Suave (Sine)</option>
+                       <option value="triangle">Agradable (Triangle)</option>
+                       <option value="square">Digital (Square)</option>
+                       <option value="sawtooth">Metálico (Sawtooth)</option>
+                     </select>
+                   </div>
+                   <div>
+                     <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Graves / Agudos</label>
+                     <select 
+                       value={businessSettings.theme?.sound_freq_mult || 1.0} 
+                       onChange={(e) => {
+                         const updated = {...businessSettings, theme: {...businessSettings.theme, sound_freq_mult: parseFloat(e.target.value)}};
+                         setBusinessSettings(updated);
+                         playNewOrderSound(updated.theme);
+                       }}
+                       className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-bold"
+                     >
+                       <option value="0.5">Muy Grave (x0.5)</option>
+                       <option value="0.75">Grave (x0.75)</option>
+                       <option value="1.0">Normal (x1.0)</option>
+                       <option value="1.5">Agudo (x1.5)</option>
+                       <option value="2.0">Muy Agudo (x2.0)</option>
+                     </select>
+                   </div>
+                   <div>
+                     <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Volumen</label>
+                     <div className="flex bg-[#111] border border-[#333] rounded-xl overflow-hidden relative p-3 items-center gap-3">
+                       <span className="text-sm">🔇</span>
+                       <input 
+                         type="range" 
+                         min="0" max="1" step="0.1" 
+                         value={businessSettings.theme?.sound_volume !== undefined ? businessSettings.theme.sound_volume : 0.5} 
+                         onChange={(e) => {
+                           const updated = {...businessSettings, theme: {...businessSettings.theme, sound_volume: parseFloat(e.target.value)}};
+                           setBusinessSettings(updated);
+                           // To avoid spamming, the range slider updates the model, and MouseUp plays it.
+                         }} 
+                         onMouseUp={() => playNewOrderSound()}
+                         onTouchEnd={() => playNewOrderSound()}
+                         className="flex-1 accent-accent" 
+                       />
+                       <span className="text-sm">🔊</span>
+                     </div>
+                   </div>
+                 </div>
+                 <div className="mt-4 flex justify-end">
+                    <button type="button" onClick={() => playNewOrderSound()} className="bg-[#222] hover:bg-[#333] text-white px-4 py-2 rounded-xl text-sm font-bold border border-white/10 transition-colors">
+                      ▶ Reproducir de prueba
+                    </button>
+                 </div>
+               </div>
             </div>
           </details>
         </motion.div>
@@ -893,13 +965,16 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
         )}
       </div>
 
+        </>
+      )}
+
       <AnimatePresence>
         {isAddModalOpen && (
           <motion.div 
             initial={{ opacity: 0 }} 
             animate={{ opacity: 1 }} 
             exit={{ opacity: 0 }} 
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
           >
             <motion.div 
               initial={{ scale: 0.9, y: 50 }} 
@@ -909,7 +984,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
             >
               <button 
                 onClick={() => setIsAddModalOpen(false)}
-                className="absolute top-4 right-4 text-gray-500 hover:text-white bg-[#111] p-2 rounded-full transition-colors"
+                className="absolute top-4 right-4 text-gray-500 hover:text-white bg-[#111] p-2 rounded-full transition-colors z-10"
               >
                 <X size={20} />
               </button>
@@ -962,8 +1037,6 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
         )}
       </AnimatePresence>
 
-        </>
-      )}
     </div>
   );
 }
