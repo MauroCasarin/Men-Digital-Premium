@@ -267,15 +267,19 @@ export default function ClientApp() {
             name: data.name || 'TU NOMBRE.MENU',
             logo_url: data.logo_url || '',
             categories: data.categories || ['Menú', 'Bebidas'],
-            hidden_categories: data.hidden_categories || [],
-            theme: data.theme || { accent: '#FFCC00', bg: '#0A0A0A', card: '#141414' }
+            theme: {
+              accent: data.theme?.accent || '#FFCC00',
+              bg: data.theme?.bg || '#0A0A0A',
+              card: data.theme?.card || '#141414',
+              hidden_categories: data.theme?.hidden_categories || data.hidden_categories || []
+            }
           });
           if (data.categories && Array.isArray(data.categories) && data.categories.length > 0) {
             // Also override categories state so the navigation pill menu takes custom ones if needed
             // Only if they exist to prevent breaking
             setCategories(data.categories);
             
-            const visibleCats = data.categories.filter((c: string) => !(data.hidden_categories || []).includes(c));
+            const visibleCats = data.categories.filter((c: string) => !(data.theme?.hidden_categories || data.hidden_categories || []).includes(c));
             if (visibleCats.length > 0) {
                 setActiveCategory(visibleCats[0]);
             } else {
@@ -302,13 +306,17 @@ export default function ClientApp() {
             name: data.name || 'TU NOMBRE.MENU',
             logo_url: data.logo_url || '',
             categories: data.categories || ['Menú', 'Bebidas'],
-            hidden_categories: data.hidden_categories || [],
-            theme: data.theme || { accent: '#FFCC00', bg: '#0A0A0A', card: '#141414' }
+            theme: {
+              accent: data.theme?.accent || '#FFCC00',
+              bg: data.theme?.bg || '#0A0A0A',
+              card: data.theme?.card || '#141414',
+              hidden_categories: data.theme?.hidden_categories || data.hidden_categories || []
+            }
           });
           if (data.categories && Array.isArray(data.categories) && data.categories.length > 0) {
              setCategories(data.categories);
              
-             const visibleCats = data.categories.filter((c: string) => !(data.hidden_categories || []).includes(c));
+             const visibleCats = data.categories.filter((c: string) => !(data.theme?.hidden_categories || data.hidden_categories || []).includes(c));
              setActiveCategory(prev => {
                 if (visibleCats.includes(prev)) return prev;
                 return visibleCats.length > 0 ? visibleCats[0] : data.categories[0];
@@ -599,7 +607,7 @@ export default function ClientApp() {
           
           {/* Categories - Auto-scaling, just below title */}
           <div className="flex flex-wrap gap-2">
-            {categories.filter(cat => !(businessSettings.hidden_categories || []).includes(cat)).map(cat => (
+            {categories.filter(cat => !(businessSettings.theme?.hidden_categories || []).includes(cat)).map(cat => (
               <motion.button
                 key={cat}
                 whileTap={{ scale: 0.95 }}

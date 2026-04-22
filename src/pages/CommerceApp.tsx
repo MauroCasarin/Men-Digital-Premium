@@ -20,6 +20,7 @@ export default function CommerceApp() {
   const [activeTab, setActiveTab] = useState<'orders' | 'config'>('orders');
   
   const [menuItems, setMenuItems] = useState<Product[]>(PRODUCTS);
+  const [deletedProductIds, setDeletedProductIds] = useState<string[]>([]);
   const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '', holder_name: '', name: 'TU NOMBRE.MENU', logo_url: '', categories: ['Menú', 'Bebidas'], theme: { accent: '#FFCC00', bg: '#0A0A0A', card: '#141414', hidden_categories: [] as string[] } });
   const [dbErrorSql, setDbErrorSql] = useState<string | null>(null);
   const [newCategory, setNewCategory] = useState('');
@@ -291,11 +292,19 @@ ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS theme JSONB DEFAULT '{"ac
 
   const handleDeleteProduct = (id: string | number) => {
     setMenuItems(menuItems.filter(p => p.id !== id));
+    setDeletedProductIds(prev => [...prev, String(id)]);
   };
 
   const saveMenuConfig = async () => {
     setIsSaving(true);
     try {
+      // Delete removed items first
+      if (deletedProductIds.length > 0) {
+        const { error: delError } = await supabase.from('menu_items').delete().in('id', deletedProductIds);
+        if (delError) console.error("Could not delete items:", delError);
+        else setDeletedProductIds([]);
+      }
+
       // Save menu
       const { error: menuError } = await supabase.from('menu_items').upsert(menuItems);
       if (menuError) throw menuError;
