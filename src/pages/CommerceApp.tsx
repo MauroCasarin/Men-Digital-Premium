@@ -706,15 +706,31 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
                </div>
                 <div className="mt-8 pt-6 border-t border-[#333]">
                  <h4 className="text-xs font-bold text-gray-400 block mb-4 uppercase tracking-wider">Sonido de Notificaciones</h4>
-                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                    <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Tipo de Sonido</label>
+                     <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Tipo (Comercio)</label>
                      <select 
                        value={businessSettings.theme?.sound_type || 'sine'} 
                        onChange={(e) => {
                          const updated = {...businessSettings, theme: {...businessSettings.theme, sound_type: e.target.value}};
                          setBusinessSettings(updated);
                          playNewOrderSound(updated.theme);
+                       }}
+                       className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-bold"
+                     >
+                       <option value="sine">Suave (Sine)</option>
+                       <option value="triangle">Agradable (Triangle)</option>
+                       <option value="square">Digital (Square)</option>
+                       <option value="sawtooth">Metálico (Sawtooth)</option>
+                     </select>
+                   </div>
+                   <div>
+                     <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Tipo (Cliente)</label>
+                     <select 
+                       value={businessSettings.theme?.client_sound_type || 'square'} 
+                       onChange={(e) => {
+                         const updated = {...businessSettings, theme: {...businessSettings.theme, client_sound_type: e.target.value}};
+                         setBusinessSettings(updated);
                        }}
                        className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-bold"
                      >
@@ -744,7 +760,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
                    </div>
                    <div>
                      <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Volumen</label>
-                     <div className="flex bg-[#111] border border-[#333] rounded-xl overflow-hidden relative p-3 items-center gap-3">
+                     <div className="flex bg-[#111] border border-[#333] rounded-xl overflow-hidden relative p-3 items-center gap-3 h-[46px]">
                        <span className="text-sm">🔇</span>
                        <input 
                          type="range" 
@@ -767,6 +783,30 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
                     <button type="button" onClick={() => playNewOrderSound()} className="bg-[#222] hover:bg-[#333] text-white px-4 py-2 rounded-xl text-sm font-bold border border-white/10 transition-colors">
                       ▶ Reproducir de prueba
                     </button>
+                 </div>
+               </div>
+
+               <div className="mt-8 pt-6 border-t border-[#333]">
+                 <h4 className="text-xs font-bold text-gray-400 block mb-4 uppercase tracking-wider">Efecto Visual (Parallax)</h4>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                   <div>
+                     <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Intensidad del efecto en imágenes</label>
+                     <div className="flex bg-[#111] border border-[#333] rounded-xl overflow-hidden relative p-3 items-center gap-3">
+                       <span className="text-xs text-gray-400 font-bold w-12 text-center text-[10px]">OFF</span>
+                       <input 
+                         type="range" 
+                         min="0" max="250" step="10" 
+                         value={businessSettings.theme?.parallax_intensity !== undefined ? businessSettings.theme.parallax_intensity : 100} 
+                         onChange={(e) => {
+                           const updated = {...businessSettings, theme: {...businessSettings.theme, parallax_intensity: parseInt(e.target.value)}};
+                           setBusinessSettings(updated);
+                         }} 
+                         className="flex-1 accent-accent" 
+                       />
+                       <span className="text-xs text-accent font-black w-12 text-center text-[10px]">MAX</span>
+                     </div>
+                     <p className="text-[10px] text-gray-500 mt-2">Afecta el movimiento de las imágenes de comida al usar el rotación/giro del celular o al hacer scroll.</p>
+                   </div>
                  </div>
                </div>
             </div>

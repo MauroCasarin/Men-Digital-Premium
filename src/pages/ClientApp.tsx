@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence, useScroll, useTransform } from 'motion/react';
+import { motion, AnimatePresence, useScroll, useTransform, useMotionValue } from 'motion/react';
 import ReactCrop, { type Crop as CropType } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { 
@@ -30,17 +30,54 @@ import { PRODUCTS, WHATSAPP_PHONE } from '../constants';
 import { supabase } from '../lib/supabase';
 
 // Componente para efecto Parallax
-function ParallaxImage({ src, alt, className }: { src: string, alt?: string, className?: string }) {
+function ParallaxImage({ src, alt, className, intensity = 1 }: { src: string, alt?: string, className?: string, intensity?: number }) {
   const ref = useRef<HTMLDivElement>(null);
+  
+  // Efecto por Scroll
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
-  const y = useTransform(scrollYProgress, [0, 1], ["-20%", "20%"]);
+  const scrollY = useTransform(scrollYProgress, [0, 1], [-20 * intensity, 20 * intensity]);
+
+  // Efecto por Sensor Giroscopio/Acelerómetro
+  const deviceX = useMotionValue(0);
+  const deviceY = useMotionValue(0);
+
+  useEffect(() => {
+    if (intensity === 0) return;
+    
+    const handleOrientation = (event: DeviceOrientationEvent) => {
+      // Gamma es el ángulo Izaquierda/Derecha (-90 a 90)
+      // Beta es el ángulo Arriba/Abajo (-180 a 180)
+      const gamma = event.gamma || 0; 
+      const beta = event.beta || 45; // Asumimos 45 grados como posición neutral en la mano
+      
+      const tiltX = Math.min(Math.max(gamma / 45, -1), 1);
+      const tiltY = Math.min(Math.max((beta - 45) / 45, -1), 1);
+      
+      deviceX.set(tiltX * 10 * intensity);
+      deviceY.set(tiltY * 10 * intensity);
+    };
+
+    if (typeof window !== 'undefined' && window.DeviceOrientationEvent) {
+       window.addEventListener('deviceorientation', handleOrientation);
+    }
+    
+    return () => {
+      if (typeof window !== 'undefined' && window.DeviceOrientationEvent) {
+         window.removeEventListener('deviceorientation', handleOrientation);
+      }
+    };
+  }, [intensity, deviceX, deviceY]);
+
+  // Combinar ambos valores para el eje Y, y usar solo dispositivo para el X
+  const combinedY = useTransform(() => `calc(${scrollY.get()}% + ${deviceY.get()}%)`);
+  const finalX = useTransform(() => `${deviceX.get()}%`);
   
   return (
     <div ref={ref} className={`relative overflow-hidden ${className}`}>
       <motion.img 
         src={src} 
         alt={alt}
-        style={{ y, scale: 1.25 }}
+        style={{ x: finalX, y: combinedY, scale: 1.25 + (intensity * 0.1) }}
         className="absolute inset-[-20%] w-[140%] h-[140%] object-cover origin-center"
         referrerPolicy="no-referrer"
       />
@@ -108,7 +145,7 @@ export default function ClientApp() {
   };
 
   // Safe global audio context to prevent creating >6 contexts per session (which crashes iOS/Safari).
-  const getAudioContext = (() => {
+  const getAudioContext = useMemo(() => {
     let ctx: AudioContext | null = null;
     return () => {
       if (!ctx) {
@@ -120,9 +157,9 @@ export default function ClientApp() {
       }
       return ctx;
     };
-  })();
+  }, []);
 
-  const playNotificationSound = () => {
+  const playNotificationSound = useCallback(() => {
     try {
       const audioCtx = getAudioContext();
       if (!audioCtx) return;
@@ -136,9 +173,14 @@ export default function ClientApp() {
         const gainNode = audioCtx.createGain();
         oscillator.connect(gainNode);
         gainNode.connect(audioCtx.destination);
-        oscillator.type = 'square'; // Agudo y penetrante
-        oscillator.frequency.setValueAtTime(freq, startTime);
-        gainNode.gain.setValueAtTime(0.3, startTime);
+        
+        oscillator.type = businessSettings.theme?.client_sound_type || 'square';
+        
+        const freqMult = businessSettings.theme?.sound_freq_mult || 1.0;
+        oscillator.frequency.setValueAtTime(freq * freqMult, startTime);
+        
+        const vol = businessSettings.theme?.sound_volume !== undefined ? businessSettings.theme.sound_volume : 0.5;
+        gainNode.gain.setValueAtTime(vol * 0.5, startTime);
         oscillator.start(startTime);
         gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.3);
         oscillator.stop(startTime + 0.3);
@@ -149,7 +191,7 @@ export default function ClientApp() {
       playBeep(1500, t + 0.15);
       playBeep(1800, t + 0.3);
     } catch(e) {}
-  };
+  }, [businessSettings, getAudioContext]);
 
   useEffect(() => {
     let alertInterval: NodeJS.Timeout;
@@ -680,7 +722,7 @@ export default function ClientApp() {
               >
                  <button onClick={() => setSelectedProduct(null)} className="absolute top-4 right-4 text-white p-2 bg-black/50 rounded-full hover:bg-black/80 transition-colors z-10"><X size={20}/></button>
                  <div className="relative overflow-hidden rounded-2xl mb-4">
-                   <ParallaxImage src={selectedProduct.image} className="w-full h-48 sm:h-64" />
+                   <ParallaxImage src={selectedProduct.image} intensity={businessSettings.theme?.parallax_intensity !== undefined ? businessSettings.theme.parallax_intensity / 100 : 1} className="w-full h-48 sm:h-64" />
                    <div className="absolute inset-0 bg-linear-to-t from-[#1a1810] via-transparent to-transparent" />
                  </div>
                  <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">{selectedProduct.name}</h2>
@@ -733,6 +775,7 @@ export default function ClientApp() {
                <ParallaxImage 
                 src={product.image || `https://picsum.photos/seed/${product.name}/500/300?blur=2`} 
                 alt={product.name}
+                intensity={businessSettings.theme?.parallax_intensity !== undefined ? businessSettings.theme.parallax_intensity / 100 : 1}
                 className="w-full h-full" 
               />
             </div>
@@ -1009,7 +1052,7 @@ export default function ClientApp() {
                   >
                     <div className="flex gap-4 items-center">
                       <div className="w-12 h-12 rounded-xl overflow-hidden bg-[#222] shadow-lg flex-shrink-0">
-                        <ParallaxImage src={item.product.image} className="w-full h-full" alt="" />
+                        <ParallaxImage src={item.product.image} intensity={businessSettings.theme?.parallax_intensity !== undefined ? businessSettings.theme.parallax_intensity / 100 : 1} className="w-full h-full" alt="" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-bold text-white truncate group-hover:text-accent transition-colors">{item.product.name}</h4>
@@ -1423,7 +1466,7 @@ export default function ClientApp() {
                         <div key={item.product.id} className="flex flex-col gap-4 bg-card-dark p-4 rounded-2xl border border-border-dark shadow-xl">
                           <div className="flex gap-4 items-center">
                             <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden shadow-lg">
-                               <ParallaxImage src={item.product.image} className="w-full h-full" alt="" />
+                               <ParallaxImage src={item.product.image} intensity={businessSettings.theme?.parallax_intensity !== undefined ? businessSettings.theme.parallax_intensity / 100 : 1} className="w-full h-full" alt="" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <h4 className="text-sm font-bold truncate text-white">{item.product.name}</h4>
