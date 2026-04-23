@@ -383,17 +383,17 @@ export default function ClientApp() {
 
   const clearClientHistory = async () => {
     if (!customerName) return;
-    if (!window.confirm("¿Estás seguro de que deseas eliminar tu historial de pedidos completados?")) return;
+    if (!window.confirm("¿Estás seguro de que deseas eliminar tu historial de pedidos completados/entregados?")) return;
     try {
       setIsLoadingHistory(true);
       const { error } = await supabase
         .from('orders')
         .delete()
-        .eq('status', 'completed')
+        .in('status', ['completed', 'delivered'])
         .ilike('customer_name', customerName.trim());
       
       if (error) throw error;
-      setPastOrders(pastOrders.filter(o => o.status !== 'completed'));
+      setPastOrders(pastOrders.filter(o => !['completed', 'delivered'].includes(o.status)));
       alert("Historial completado eliminado.");
     } catch (e) {
       console.error(e);
@@ -405,20 +405,28 @@ export default function ClientApp() {
 
   const getCroppedImg = (image: HTMLImageElement, pixelCrop: CropType): string => {
     const canvas = document.createElement('canvas');
-    canvas.width = pixelCrop.width;
-    canvas.height = pixelCrop.height;
+    const scaleX = image.naturalWidth / image.width;
+    const scaleY = image.naturalHeight / image.height;
+    
+    canvas.width = pixelCrop.width * scaleX;
+    canvas.height = pixelCrop.height * scaleY;
     const ctx = canvas.getContext('2d');
     if (!ctx) return '';
+    
+    // Better rendering quality
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    
     ctx.drawImage(
       image,
-      pixelCrop.x,
-      pixelCrop.y,
-      pixelCrop.width,
-      pixelCrop.height,
+      pixelCrop.x * scaleX,
+      pixelCrop.y * scaleY,
+      pixelCrop.width * scaleX,
+      pixelCrop.height * scaleY,
       0,
       0,
-      pixelCrop.width,
-      pixelCrop.height
+      canvas.width,
+      canvas.height
     );
     return canvas.toDataURL('image/jpeg', 0.8);
   };
@@ -598,7 +606,7 @@ export default function ClientApp() {
           <div className="flex items-center justify-between">
             <motion.div whileHover={{ scale: 1.05 }} className="flex items-center gap-3 cursor-default">
               {businessSettings.logo_url && <img src={businessSettings.logo_url} alt="Logo" className="h-10 w-auto rounded object-cover" />}
-              <span className="text-xl sm:text-2xl font-extrabold tracking-tighter">{businessSettings.name}</span>
+                           <span className="text-xl sm:text-2xl font-extrabold tracking-tighter">{businessSettings.name || 'TU NOMBRE.MENU'}</span>
             </motion.div>
             <div className="flex items-center gap-2">
               <button onClick={fetchHistory} className="p-3 bg-[#222] rounded-xl text-white hover:bg-[#333] transition-colors relative">
@@ -1152,7 +1160,7 @@ export default function ClientApp() {
                               <UtensilsCrossed size={80} className="text-accent mb-4 mx-auto" />
                            </motion.div>
                            <h3 className="text-3xl font-black text-accent tracking-tighter">¡PEDIDO LISTO!</h3>
-                           <p className="text-base text-gray-300 font-medium">Acércate al mostrador indicando:<br/><span className="text-white font-black text-xl bg-[#222] px-4 py-2 rounded-xl inline-block mt-3 border border-border-dark">{customerName}</span></p>
+                        <p className="text-base text-gray-300 font-medium">Acércate al mostrador indicando:<br/><span className="text-white font-black text-xl bg-[#222] px-4 py-2 rounded-xl inline-block mt-3 border border-border-dark w-full text-center">{customerName}</span></p>
                            
                            <button 
                              onClick={handleOnTheWay}
@@ -1493,10 +1501,10 @@ export default function ClientApp() {
               <div className="p-6 border-b border-border-dark flex items-center justify-between bg-[#111]">
                 <h2 className="text-2xl font-black tracking-tight flex items-center gap-3 text-white">
                   <History size={28} className="text-accent" />
-                  MIS PEDIDOS
+                  HISTORIAL
                 </h2>
                 <div className="flex items-center gap-4">
-                  {pastOrders.some(o => o.status === 'completed') && (
+                  {pastOrders.some(o => ['completed', 'delivered'].includes(o.status)) && (
                     <button onClick={clearClientHistory} className="text-xs text-red-500 font-bold hover:text-red-400 bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20">
                       Eliminar
                     </button>
@@ -1535,7 +1543,7 @@ export default function ClientApp() {
                             <span className="block text-xl font-black text-accent">${order.total.toFixed(2)}</span>
                             <span className={`inline-block mt-1 text-[10px] uppercase font-bold px-2 py-0.5 rounded border 
                               ${order.status === 'completed' ? 'bg-[#222] text-gray-400 border-gray-700' : 'bg-green-500/20 text-green-500 border-green-500/50'}`}>
-                              {order.status === 'completed' ? 'RETIRADO' : order.status === 'delivered' ? 'ENTREGADO' : 'EN CURSO'}
+                              {order.status === 'completed' ? 'RETIRADO' : order.status === 'delivered' ? 'PEDIDO ENTREGADO' : 'EN CURSO'}
                             </span>
                           </div>
                         </div>

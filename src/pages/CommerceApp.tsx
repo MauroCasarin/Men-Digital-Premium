@@ -380,10 +380,11 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
       const { error } = await supabase
         .from('orders')
         .delete()
-        .eq('status', 'completed');
+        .in('status', ['completed', 'delivered']);
       
       if (error) throw error;
-      alert("Historial limpiado correctamente");
+      setOrders(orders.filter(o => !['completed', 'delivered'].includes(o.status)));
+      alert("Historial limpiado correctamente.");
     } catch (err: any) {
       console.error(err);
       alert("No se pudo limpiar el historial: " + err.message);
@@ -486,7 +487,12 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
                           setBusinessSettings({...businessSettings, theme: {...businessSettings.theme, hidden_categories: newHidden}});
                         }} title={isHidden ? 'Oculta al cliente. Clic para mostrar.' : 'Visible al cliente. Clic para ocultar.'}>
                           {cat}
-                          <button onClick={(e) => { e.stopPropagation(); setBusinessSettings({...businessSettings, categories: businessSettings.categories.filter((_, idx) => idx !== i)}); }} className="hover:text-white"><Trash2 size={12}/></button>
+                          <button onClick={(e) => { 
+                            e.stopPropagation(); 
+                            if (window.confirm(`¿Estás seguro de que deseas eliminar la categoría "${cat}"?`)) {
+                              setBusinessSettings({...businessSettings, categories: businessSettings.categories.filter((_, idx) => idx !== i)}); 
+                            }
+                          }} className="hover:text-white"><Trash2 size={12}/></button>
                         </span>
                       );
                     })}
@@ -888,7 +894,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
       {pastOrders.length > 0 && (
         <div className="mt-12 mb-8">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-400 flex items-center gap-2">Historial de Turno</h2>
+            <h2 className="text-xl font-bold text-gray-400 flex items-center gap-2">Historial</h2>
           </div>
           <div className="flex flex-col gap-2">
             {pastOrders.map(order => {
