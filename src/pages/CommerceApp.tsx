@@ -53,6 +53,7 @@ export default function CommerceApp() {
             logo_url: settingsData.logo_url || '',
             categories: settingsData.categories || ['Menú', 'Bebidas'],
             theme: {
+              ...settingsData.theme, // Merge all other theme properties like sound and parallax
               accent: settingsData.theme?.accent || '#FFCC00',
               bg: settingsData.theme?.bg || '#0A0A0A',
               card: settingsData.theme?.card || '#141414',

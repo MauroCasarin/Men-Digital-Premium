@@ -331,6 +331,7 @@ export default function ClientApp() {
             logo_url: data.logo_url || '',
             categories: data.categories || ['Menú', 'Bebidas'],
             theme: {
+              ...data.theme,
               accent: data.theme?.accent || '#FFCC00',
               bg: data.theme?.bg || '#0A0A0A',
               card: data.theme?.card || '#141414',
@@ -370,6 +371,7 @@ export default function ClientApp() {
             logo_url: data.logo_url || '',
             categories: data.categories || ['Menú', 'Bebidas'],
             theme: {
+              ...data.theme,
               accent: data.theme?.accent || '#FFCC00',
               bg: data.theme?.bg || '#0A0A0A',
               card: data.theme?.card || '#141414',
