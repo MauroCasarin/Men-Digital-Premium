@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useScroll, useTransform } from 'motion/react';
 import ReactCrop, { type Crop as CropType } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { 
@@ -19,12 +19,34 @@ import {
   ChevronRight,
   CheckCircle,
   UtensilsCrossed,
-  History,
-  Crop
+  Crop,
+  Cog,
+  Package,
+  CheckCircle2,
+  ThumbsUp
 } from 'lucide-react';
 import { Product, CartItem, Order } from '../types';
 import { PRODUCTS, WHATSAPP_PHONE } from '../constants';
 import { supabase } from '../lib/supabase';
+
+// Componente para efecto Parallax
+function ParallaxImage({ src, alt, className }: { src: string, alt?: string, className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
+  const y = useTransform(scrollYProgress, [0, 1], ["-20%", "20%"]);
+  
+  return (
+    <div ref={ref} className={`relative overflow-hidden ${className}`}>
+      <motion.img 
+        src={src} 
+        alt={alt}
+        style={{ y, scale: 1.25 }}
+        className="absolute inset-[-20%] w-[140%] h-[140%] object-cover origin-center"
+        referrerPolicy="no-referrer"
+      />
+    </div>
+  );
+}
 
 export default function ClientApp() {
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -609,9 +631,6 @@ export default function ClientApp() {
                            <span className="text-xl sm:text-2xl font-extrabold tracking-tighter">{businessSettings.name || 'TU NOMBRE.MENU'}</span>
             </motion.div>
             <div className="flex items-center gap-2">
-              <button onClick={fetchHistory} className="p-3 bg-[#222] rounded-xl text-white hover:bg-[#333] transition-colors relative">
-                <History size={20} />
-              </button>
               <button 
                 onClick={() => {
                   if (cart.length > 0) setShowCartMobile(true);
@@ -660,9 +679,9 @@ export default function ClientApp() {
                 onClick={e => e.stopPropagation()}
               >
                  <button onClick={() => setSelectedProduct(null)} className="absolute top-4 right-4 text-white p-2 bg-black/50 rounded-full hover:bg-black/80 transition-colors z-10"><X size={20}/></button>
-                 <div className="relative">
-                   <img src={selectedProduct.image} className="w-full h-48 sm:h-64 object-cover rounded-2xl mb-4" referrerPolicy="no-referrer" />
-                   <div className="absolute inset-0 bg-linear-to-t from-[#1a1810] via-transparent to-transparent rounded-2xl" />
+                 <div className="relative overflow-hidden rounded-2xl mb-4">
+                   <ParallaxImage src={selectedProduct.image} className="w-full h-48 sm:h-64" />
+                   <div className="absolute inset-0 bg-linear-to-t from-[#1a1810] via-transparent to-transparent" />
                  </div>
                  <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">{selectedProduct.name}</h2>
                  <p className="text-sm sm:text-base text-gray-400 mb-6">{selectedProduct.description}</p>
@@ -711,11 +730,10 @@ export default function ClientApp() {
             <div className="absolute inset-0 bg-black/70 mix-blend-multiply" />
             
             <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 relative z-10 border border-white/10 shadow-lg">
-               <img 
+               <ParallaxImage 
                 src={product.image || `https://picsum.photos/seed/${product.name}/500/300?blur=2`} 
                 alt={product.name}
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover" 
+                className="w-full h-full" 
               />
             </div>
             
@@ -756,8 +774,8 @@ export default function ClientApp() {
                         <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity, duration: 1 }}>
                            <Clock size={80} className="text-orange-500 mb-4 mx-auto" />
                         </motion.div>
-                        <h3 className="text-2xl font-bold text-white tracking-tight text-orange-500">¡Ve al mostrador!</h3>
-                        <p className="text-sm text-text-dim">Te estamos esperando para entregarte tu pedido.</p>
+                        <h3 className="text-2xl font-bold text-white tracking-tight text-orange-500">¡Pedido en movimiento!</h3>
+                        <p className="text-sm text-text-dim">El pedido se encuentra en tránsito o entrega.</p>
                      </>
                    ) : activeOrderStatus === 'ready' ? (
                      <>
@@ -766,25 +784,33 @@ export default function ClientApp() {
                            animate={{ scale: [0.8, 1.2, 1] }} 
                            transition={{ duration: 0.5, type: 'spring' }}
                         >
-                           <UtensilsCrossed size={80} className="text-accent mb-4 mx-auto drop-shadow-[0_0_15px_rgba(255,204,0,0.5)]" />
+                           <Package size={80} className="text-accent mb-4 mx-auto drop-shadow-[0_0_15px_rgba(255,204,0,0.5)]" />
                         </motion.div>
-                        <h3 className="text-3xl font-black text-accent tracking-tighter">¡PEDIDO LISTO<br/>PARA RETIRAR!</h3>
-                        <p className="text-base text-gray-300 font-medium w-full">Acércate al mostrador indicando el nombre:<br/><span className="text-white font-black text-xl bg-[#222] px-4 py-2 rounded-xl inline-block mt-3 border border-border-dark w-full">{customerName}</span></p>
+                        <h3 className="text-3xl font-black text-accent tracking-tighter">¡PEDIDO LISTO!</h3>
+                        <p className="text-base text-gray-300 font-medium w-full">Nombre registrado para la entrega:<br/><span className="text-white font-black text-xl bg-[#222] px-4 py-2 rounded-xl inline-block mt-3 border border-border-dark w-full text-center">{customerName}</span></p>
                         
                         <button 
                           onClick={handleOnTheWay}
                           className="mt-6 w-full py-4 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-xl shadow-orange-500/20 transition-all uppercase tracking-widest text-xs"
                         >
-                          Estoy en camino a retirar
+                          Estoy atento / En camino
                         </button>
                      </>
                    ) : activeOrderStatus === 'preparing' ? (
                      <>
                         <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 8, ease: 'linear' }}>
-                           <UtensilsCrossed size={64} className="text-blue-400 mb-2 mx-auto" />
+                           <Cog size={64} className="text-blue-400 mb-2 mx-auto" />
                         </motion.div>
                         <h3 className="text-2xl font-bold text-white tracking-tight">Preparando tu pedido</h3>
                         <p className="text-sm text-text-dim">¡El comercio ya está trabajando en lo tuyo!</p>
+                     </>
+                   ) : ['delivered', 'completed'].includes(activeOrderStatus) ? (
+                     <>
+                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1, rotate: [0, 10, -10, 0] }} transition={{ type: 'spring', damping: 15 }}>
+                           <CheckCircle2 size={80} className="text-green-500 mb-4 mx-auto" />
+                        </motion.div>
+                        <h3 className="text-3xl font-black text-green-500 tracking-tighter">PEDIDO ENTREGADO</h3>
+                        <p className="text-base text-gray-300 font-medium w-full text-center">¡Gracias por tu compra!</p>
                      </>
                    ) : (
                      <>
@@ -801,7 +827,7 @@ export default function ClientApp() {
                    className="flex flex-col gap-4 py-4"
                  >
                    <h3 className="text-lg font-bold text-white mb-2">¿A nombre de quién?</h3>
-                   <p className="text-xs text-text-dim mb-2">Ingresa tu nombre para identificarte al retirar.</p>
+                   <p className="text-xs text-text-dim mb-2">Necesitamos un nombre para identificarte.</p>
                    <input
                      type="text"
                      value={customerName}
@@ -983,7 +1009,7 @@ export default function ClientApp() {
                   >
                     <div className="flex gap-4 items-center">
                       <div className="w-12 h-12 rounded-xl overflow-hidden bg-[#222] shadow-lg flex-shrink-0">
-                        <img src={item.product.image} className="w-full h-full object-cover" alt="" />
+                        <ParallaxImage src={item.product.image} className="w-full h-full" alt="" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-bold text-white truncate group-hover:text-accent transition-colors">{item.product.name}</h4>
@@ -1147,8 +1173,8 @@ export default function ClientApp() {
                            <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity, duration: 1 }}>
                               <Clock size={80} className="text-orange-500 mb-4 mx-auto" />
                            </motion.div>
-                           <h3 className="text-2xl font-bold tracking-tight text-orange-500">¡Ve al mostrador!</h3>
-                           <p className="text-sm text-text-dim text-center">Te estamos esperando para entregarte tu pedido.</p>
+                           <h3 className="text-2xl font-bold tracking-tight text-orange-500">¡Pedido en movimiento!</h3>
+                           <p className="text-sm text-text-dim text-center">El pedido se encuentra en tránsito o entrega.</p>
                         </>
                       ) : activeOrderStatus === 'ready' ? (
                         <>
@@ -1157,26 +1183,34 @@ export default function ClientApp() {
                               animate={{ scale: [0.8, 1.2, 1] }} 
                               transition={{ duration: 0.5, type: 'spring' }}
                            >
-                              <UtensilsCrossed size={80} className="text-accent mb-4 mx-auto" />
+                              <Package size={80} className="text-accent mb-4 mx-auto" />
                            </motion.div>
                            <h3 className="text-3xl font-black text-accent tracking-tighter">¡PEDIDO LISTO!</h3>
-                        <p className="text-base text-gray-300 font-medium">Acércate al mostrador indicando:<br/><span className="text-white font-black text-xl bg-[#222] px-4 py-2 rounded-xl inline-block mt-3 border border-border-dark w-full text-center">{customerName}</span></p>
+                        <p className="text-base text-gray-300 font-medium">Nombre registrado para la entrega:<br/><span className="text-white font-black text-xl bg-[#222] px-4 py-2 rounded-xl inline-block mt-3 border border-border-dark w-full text-center">{customerName}</span></p>
                            
                            <button 
                              onClick={handleOnTheWay}
                              className="mt-6 w-full py-4 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-xl shadow-orange-500/20 transition-all uppercase tracking-widest text-xs"
                            >
-                             Estoy en camino a retirar
+                             Estoy atento / En camino
                            </button>
                         </>
                       ) : activeOrderStatus === 'preparing' ? (
                         <>
                            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 8, ease: 'linear' }}>
-                              <UtensilsCrossed size={64} className="text-blue-400 mb-2 mx-auto" />
+                              <Cog size={64} className="text-blue-400 mb-2 mx-auto" />
                            </motion.div>
                            <h3 className="text-2xl font-bold text-white tracking-tight">Preparando pedido</h3>
                            <p className="text-sm text-text-dim">¡El comercio ya está trabajando en lo tuyo!</p>
                         </>
+                      ) : ['delivered', 'completed'].includes(activeOrderStatus) ? (
+                         <>
+                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1, rotate: [0, 10, -10, 0] }} transition={{ type: 'spring', damping: 15 }}>
+                               <CheckCircle2 size={80} className="text-green-500 mb-4 mx-auto" />
+                            </motion.div>
+                            <h3 className="text-3xl font-black text-green-500 tracking-tighter">PEDIDO ENTREGADO</h3>
+                            <p className="text-base text-gray-300 font-medium w-full text-center">¡Gracias por tu compra!</p>
+                         </>
                       ) : (
                         <>
                            <Clock size={64} className="text-yellow-500 mb-2 mx-auto animate-pulse" />
@@ -1193,7 +1227,7 @@ export default function ClientApp() {
                     >
                       <div className="bg-card-dark border border-border-dark p-6 rounded-2xl">
                         <h3 className="text-xl font-bold text-white mb-2 tracking-tight italic">¿A nombre de quién?</h3>
-                        <p className="text-xs text-text-dim mb-4 leading-relaxed">Necesitamos un nombre para identificarte cuando vengas al local a retirar tu pedido.</p>
+                        <p className="text-xs text-text-dim mb-4 leading-relaxed">Necesitamos un nombre para identificarte.</p>
                         <input
                          type="text"
                          value={customerName}
@@ -1388,7 +1422,9 @@ export default function ClientApp() {
                       {cart.map(item => (
                         <div key={item.product.id} className="flex flex-col gap-4 bg-card-dark p-4 rounded-2xl border border-border-dark shadow-xl">
                           <div className="flex gap-4 items-center">
-                            <img src={item.product.image} className="w-16 h-16 rounded-xl object-cover shadow-lg" alt="" referrerPolicy="no-referrer" />
+                            <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden shadow-lg">
+                               <ParallaxImage src={item.product.image} className="w-full h-full" alt="" />
+                            </div>
                             <div className="flex-1 min-w-0">
                               <h4 className="text-sm font-bold truncate text-white">{item.product.name}</h4>
                               <p className="text-accent font-black text-base">${(item.product.price).toFixed(2)}</p>
