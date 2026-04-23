@@ -5,7 +5,8 @@
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import Cropper from 'react-easy-crop';
+import ReactCrop, { type Crop as CropType } from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 import { 
   ShoppingBag, 
   Plus, 
@@ -43,9 +44,9 @@ export default function ClientApp() {
   // New states for payment / AI verification
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
-  const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [crop, setCrop] = useState<CropType>({ unit: '%', width: 50, height: 50, x: 25, y: 25 });
+  const [completedCrop, setCompletedCrop] = useState<CropType | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verdict, setVerdict] = useState<{valid: boolean, reason: string} | null>(null);
   const [paymentMode, setPaymentMode] = useState<'select' | 'transfer'>('select');
@@ -380,14 +381,29 @@ export default function ClientApp() {
     }
   };
 
-  const onCropComplete = useCallback((croppedArea: any, croppedAreaPixels: any) => {
-    setCroppedAreaPixels(croppedAreaPixels);
-  }, []);
+  const clearClientHistory = async () => {
+    if (!customerName) return;
+    if (!window.confirm("¿Estás seguro de que deseas eliminar tu historial de pedidos completados?")) return;
+    try {
+      setIsLoadingHistory(true);
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('status', 'completed')
+        .ilike('customer_name', customerName.trim());
+      
+      if (error) throw error;
+      setPastOrders(pastOrders.filter(o => o.status !== 'completed'));
+      alert("Historial completado eliminado.");
+    } catch (e) {
+      console.error(e);
+      alert("Error al eliminar el historial.");
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
 
-  const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<string> => {
-    const image = new Image();
-    image.src = imageSrc;
-    await new Promise((resolve) => (image.onload = resolve));
+  const getCroppedImg = (image: HTMLImageElement, pixelCrop: CropType): string => {
     const canvas = document.createElement('canvas');
     canvas.width = pixelCrop.width;
     canvas.height = pixelCrop.height;
@@ -407,10 +423,10 @@ export default function ClientApp() {
     return canvas.toDataURL('image/jpeg', 0.8);
   };
 
-  const showCroppedImage = async () => {
+  const showCroppedImage = () => {
     try {
-      if (imageToCrop && croppedAreaPixels) {
-        const croppedImage = await getCroppedImg(imageToCrop, croppedAreaPixels);
+      if (imageToCrop && completedCrop && imgRef.current) {
+        const croppedImage = getCroppedImg(imgRef.current, completedCrop);
         setReceiptImage(croppedImage);
         setImageToCrop(null);
       }
@@ -1065,16 +1081,19 @@ export default function ClientApp() {
           {/* Render cropper outside to cover everything when cropping */}
           {imageToCrop && (
              <div className="fixed inset-0 z-[100] bg-black flex flex-col">
-               <div className="relative flex-1">
-                 <Cropper
-                   image={imageToCrop}
+               <div className="relative flex-1 flex items-center justify-center p-4 overflow-auto">
+                 <ReactCrop
                    crop={crop}
-                   zoom={zoom}
-                   aspect={16 / 9}
-                   onCropChange={setCrop}
-                   onCropComplete={onCropComplete}
-                   onZoomChange={setZoom}
-                 />
+                   onChange={(_, percentCrop) => setCrop(percentCrop)}
+                   onComplete={(c) => setCompletedCrop(c)}
+                 >
+                   <img 
+                     ref={imgRef} 
+                     alt="Recorte" 
+                     src={imageToCrop} 
+                     className="max-h-[70vh] object-contain"
+                   />
+                 </ReactCrop>
                </div>
                <div className="bg-[#111] p-6 flex justify-between items-center z-[101]">
                  <button onClick={() => setImageToCrop(null)} className="px-6 py-3 bg-red-500 rounded-xl text-white font-bold">Cancelar</button>
@@ -1476,9 +1495,16 @@ export default function ClientApp() {
                   <History size={28} className="text-accent" />
                   MIS PEDIDOS
                 </h2>
-                <button onClick={() => setShowHistory(false)} className="p-2 text-text-dim hover:text-white bg-[#222] rounded-full transition-colors">
-                  <X size={24} />
-                </button>
+                <div className="flex items-center gap-4">
+                  {pastOrders.some(o => o.status === 'completed') && (
+                    <button onClick={clearClientHistory} className="text-xs text-red-500 font-bold hover:text-red-400 bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20">
+                      Eliminar
+                    </button>
+                  )}
+                  <button onClick={() => setShowHistory(false)} className="p-2 text-text-dim hover:text-white bg-[#222] rounded-full transition-colors">
+                    <X size={24} />
+                  </button>
+                </div>
               </div>
               
               <div className="flex-1 overflow-auto p-6 scrollbar-thin scrollbar-thumb-accent/20">

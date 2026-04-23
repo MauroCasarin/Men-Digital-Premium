@@ -444,12 +444,6 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
               <p className="text-sm text-text-dim"> Suma más categorías según productos, para cobro on line agrega tus datos.</p>
             </div>
             <div className="flex flex-col w-full md:w-64 gap-3">
-              <button onClick={() => {
-                setNewProductData({ name: '', description: '', price: 0, category: businessSettings.categories.length > 0 ? businessSettings.categories[0] : 'Menú', image: '', is_recommendation: false });
-                setIsAddModalOpen(true);
-              }} className="flex items-center justify-center gap-2 bg-[#333] hover:bg-[#444] text-white px-6 py-3 rounded-xl font-bold transition-colors w-full">
-                <Plus size={18} /> Agregar
-              </button>
               <button disabled={isSaving} onClick={saveMenuConfig} className="flex items-center justify-center gap-2 bg-accent hover:bg-yellow-400 text-black px-6 py-3 rounded-xl font-bold transition-colors w-full">
                 <Save size={18} /> {isSaving ? 'Guardando...' : 'Guardar Todo'}
               </button>
@@ -582,9 +576,22 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
             // Creamos un estado local temporal para el collapse. Si quisiéramos estado real convendría extraer a un componente
             return (
                <details key={cat} className="group mt-8 bg-[#1a1a1a] p-4 rounded-2xl border border-border-dark" open={false}>
-                 <summary className="text-lg font-bold text-accent mb-4 p-2 bg-accent/10 rounded-lg inline-flex items-center cursor-pointer list-none select-none">
-                   {cat}
-                   <ChevronDown size={18} className="ml-2 transition-transform group-open:rotate-180" />
+                 <summary className="flex items-center justify-between mb-4 list-none select-none group-summary">
+                   <div className="text-lg font-bold text-accent p-2 bg-accent/10 rounded-lg inline-flex items-center cursor-pointer hover:bg-accent/20 transition-colors">
+                     {cat}
+                     <ChevronDown size={18} className="ml-2 transition-transform group-open:rotate-180" />
+                   </div>
+                   <button
+                     onClick={(e) => {
+                       e.preventDefault();
+                       e.stopPropagation();
+                       setNewProductData({ name: '', description: '', price: 0, category: cat, image: '', is_recommendation: false });
+                       setIsAddModalOpen(true);
+                     }}
+                     className="bg-[#333] hover:bg-[#444] text-white px-3 py-2 rounded-xl text-sm font-bold flex items-center gap-1 transition-colors z-10"
+                   >
+                     <Plus size={16} /> Agregar
+                   </button>
                  </summary>
                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
                   {menuItems.filter(p => p.category === cat).map((product) => {
