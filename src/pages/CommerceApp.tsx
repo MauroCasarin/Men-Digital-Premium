@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { UtensilsCrossed, Clock, CheckCircle, Package, ChevronDown, ChevronUp, Settings, Plus, Save, Trash2 } from 'lucide-react';
+import { UtensilsCrossed, Clock, CheckCircle, Package, ChevronDown, ChevronUp, Settings, Plus, Save, Trash2, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Order, Product } from '../types';
 import { PRODUCTS } from '../constants';
@@ -391,6 +391,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
         .eq('status', 'completed');
       
       if (error) throw error;
+      setOrders(prev => prev.filter(o => !['delivered', 'completed'].includes(o.status)));
       alert("Historial limpiado correctamente");
     } catch (err: any) {
       console.error(err);
