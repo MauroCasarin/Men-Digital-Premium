@@ -893,16 +893,29 @@ export default function ClientApp() {
                              </label>
                            ) : (
                              <div className="flex flex-col gap-3">
-                               <div 
-                                 className="relative h-48 rounded-xl overflow-hidden border border-[#444] cursor-pointer group"
-                                 onClick={() => { setOriginalReceiptImage(receiptImage); setImageToCrop(rawImage || receiptImage); setReceiptImage(null); setVerdict(null); }}
-                               >
-                                 <img src={receiptImage} alt="Comprobante" className="w-full h-full object-cover group-hover:opacity-50 transition-opacity" />
-                                 <button 
-                                   className="absolute top-2 right-2 bg-[#222] text-white rounded-lg px-3 py-1.5 flex items-center gap-1 shadow-xl text-xs font-bold pointer-events-none"
-                                 >
-                                   ✏️ Editar
-                                 </button>
+                               <div className="relative rounded-xl overflow-hidden border border-[#444] bg-black group flex justify-center items-center">
+                                 <img 
+                                   src={receiptImage} 
+                                   alt="Comprobante" 
+                                   className="w-full h-auto max-h-[400px] object-contain cursor-pointer group-hover:opacity-75 transition-opacity" 
+                                   onClick={() => { setOriginalReceiptImage(receiptImage); setImageToCrop(rawImage || receiptImage); setReceiptImage(null); setVerdict(null); }}
+                                 />
+                                 <div className="absolute top-2 right-2 flex gap-2">
+                                   <button 
+                                     onClick={(e) => { e.stopPropagation(); setReceiptImage(null); setRawImage(null); setVerdict(null); setOriginalReceiptImage(null); }}
+                                     className="bg-red-500/90 hover:bg-red-600 text-white rounded-lg p-2 flex items-center shadow-xl transition-colors"
+                                     title="Elegir otro comprobante"
+                                   >
+                                     <Trash2 size={16} />
+                                   </button>
+                                   <button 
+                                     onClick={(e) => { e.stopPropagation(); setOriginalReceiptImage(receiptImage); setImageToCrop(rawImage || receiptImage); setReceiptImage(null); setVerdict(null); }}
+                                     className="bg-[#222]/90 hover:bg-[#333] text-white rounded-lg px-3 py-1.5 flex items-center gap-1 shadow-xl text-xs font-bold transition-colors"
+                                     title="Editar recorte"
+                                   >
+                                     ✏️ Editar
+                                   </button>
+                                 </div>
                                </div>
                                
                                {verdict ? (
@@ -1316,14 +1329,28 @@ export default function ClientApp() {
                               </label>
                             ) : (
                               <div className="flex flex-col gap-4">
-                                <div 
-                                  className="relative h-48 rounded-xl overflow-hidden border border-[#222] cursor-pointer group"
-                                  onClick={() => { setOriginalReceiptImage(receiptImage); setImageToCrop(rawImage || receiptImage); setReceiptImage(null); setVerdict(null); }}
-                                >
-                                  <img src={receiptImage} alt="Recibo" className="w-full h-full object-cover group-hover:opacity-50 transition-opacity" />
-                                  <button className="absolute top-2 right-2 bg-[#222] text-white rounded-lg px-3 py-1.5 shadow-xl flex items-center gap-1 text-xs font-bold pointer-events-none">
-                                    ✏️ Editar
-                                  </button>
+                                <div className="relative rounded-xl overflow-hidden border border-[#222] bg-black group flex justify-center items-center">
+                                  <img 
+                                    src={receiptImage} 
+                                    alt="Recibo" 
+                                    className="w-full h-auto max-h-[400px] object-contain cursor-pointer group-hover:opacity-75 transition-opacity" 
+                                    onClick={() => { setOriginalReceiptImage(receiptImage); setImageToCrop(rawImage || receiptImage); setReceiptImage(null); setVerdict(null); }}
+                                  />
+                                  <div className="absolute top-2 right-2 flex gap-2">
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); setReceiptImage(null); setRawImage(null); setVerdict(null); setOriginalReceiptImage(null); }}
+                                      className="bg-red-500/90 hover:bg-red-600 text-white rounded-lg p-2 shadow-xl transition-colors"
+                                      title="Elegir otro comprobante"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); setOriginalReceiptImage(receiptImage); setImageToCrop(rawImage || receiptImage); setReceiptImage(null); setVerdict(null); }}
+                                      className="bg-[#222]/90 hover:bg-[#333] text-white rounded-lg px-3 py-1.5 shadow-xl flex items-center gap-1 text-xs font-bold transition-colors"
+                                    >
+                                      ✏️ Editar
+                                    </button>
+                                  </div>
                                 </div>
 
                                 {verdict ? (

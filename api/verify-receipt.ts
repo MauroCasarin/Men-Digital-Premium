@@ -33,7 +33,7 @@ export default async function handler(req, res) {
 DATOS ESPERADOS:
 - Monto exacto: $${expectedTotal}
 - Fecha de hoy: ${expectedDate}
-- Hora actual: ${expectedTime} (el comprobante debe ser de los últimos 30 minutos)
+- Hora actual: ${expectedTime} (el comprobante debe ser de los últimos 15 minutos)
 - Alias o CBU/CVU destino: ${businessAlias}
 - Titular de la cuenta destino: ${holderName}
 
@@ -41,7 +41,7 @@ VERIFICACIONES OBLIGATORIAS (todas deben cumplirse para ser válido):
 1. ¿El estado dice explícitamente "Comprobante de transferencia" o "Transferencia recibida"? Si dice "enviada", "en proceso" o no está claro: INVÁLIDO.
 2. ¿El monto coincide exactamente con $${expectedTotal}? Tolerancia: $0.
 3. ¿La fecha es de hoy ${expectedDate}? Si es de otro día: INVÁLIDO.
-4. ¿La hora está dentro de los últimos 30 minutos respecto a ${expectedTime}? Si es más antigua: INVÁLIDO.
+4. ¿La hora está dentro de los últimos 15 minutos respecto a ${expectedTime}? Si es más antigua: INVÁLIDO.
 5. ¿El destinatario coincide con el alias "${businessAlias}" o el titular "${holderName}"? Buscar en el campo "Para" o "Destinatario".
 6. ¿Tiene número de operación o ID de transacción visible?
 7. ¿La imagen parece ser una captura real de una app bancaria o billetera virtual? Si parece editada, con fuentes inconsistentes, o datos superpuestos artificialmente: INVÁLIDO.
