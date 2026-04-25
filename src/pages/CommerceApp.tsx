@@ -590,9 +590,23 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
             // Creamos un estado local temporal para el collapse. Si quisiéramos estado real convendría extraer a un componente
             return (
                <details key={cat} className="group mt-8 bg-[#1a1a1a] p-4 rounded-2xl border border-border-dark" open={false}>
-                 <summary className="text-lg font-bold text-accent mb-4 p-2 bg-accent/10 rounded-lg inline-flex items-center cursor-pointer list-none select-none">
-                   {cat}
-                   <ChevronDown size={18} className="ml-2 transition-transform group-open:rotate-180" />
+                 <summary className="text-lg font-bold text-accent mb-4 p-2 bg-accent/10 rounded-lg flex justify-between items-center w-full cursor-pointer list-none select-none">
+                   <div className="flex items-center">
+                     {cat}
+                     <ChevronDown size={18} className="ml-2 transition-transform group-open:rotate-180" />
+                   </div>
+                   <button 
+                     onClick={(e) => {
+                       e.preventDefault();
+                       e.stopPropagation();
+                       setNewProductData({ name: '', description: '', price: 0, category: cat, image: '', is_recommendation: false });
+                       setIsAddModalOpen(true);
+                     }}
+                     className="flex items-center gap-1 text-sm bg-accent/20 hover:bg-accent/40 text-accent px-3 py-1 rounded-md transition-colors"
+                   >
+                     <Plus size={16} />
+                     <span className="hidden sm:inline">Agregar Producto</span>
+                   </button>
                  </summary>
                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
                   {menuItems.filter(p => p.category === cat).map((product) => {
