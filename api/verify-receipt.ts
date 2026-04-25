@@ -28,27 +28,36 @@ export default async function handler(req, res) {
           role: "user",
           parts: [
             { 
-              text: `Analiza este comprobante de pago de transferencia o billetera virtual de Argentina. 
-DATOS PARA COMPARAR (ESTRICTO):
-1. Monto a pagar: $${expectedTotal}
-2. Fecha y hora de hoy: ${expectedDate} ${expectedTime}
-3. Cuenta destino para verificar (Alias o CVU/CBU): ${businessAlias}
-4. Titular de la cuenta destino: ${holderName}
+              text: `Sos un sistema antifraude para un comercio argentino. Analizá este comprobante de pago con MÁXIMO RIGOR.
 
-TAREAS EXCLUYENTES:
-- Extrae el ID/Número de Operación o Transacción (ej. 155262852608 o 44642124).
-- Extrae el CUIT/CUIL del emisor (ej. 20-24788214-7 o 27266872637).
-- Verifica estrictamente que el Estado del Pago sea "Transferencia recibida" o "Comprobante de transferencia". Si dice "Transferencia enviada", "En proceso", o no lo especifica claramente como recibida/comprobante, es inválido.
-- Extrae el monto de la transferencia y verifica destino.
+DATOS ESPERADOS:
+- Monto exacto: $${expectedTotal}
+- Fecha de hoy: ${expectedDate}
+- Hora actual: ${expectedTime} (el comprobante debe ser de los últimos 30 minutos)
+- Alias o CBU/CVU destino: ${businessAlias}
+- Titular de la cuenta destino: ${holderName}
 
-Responde ÚNICAMENTE un JSON válido con esta estructura:
+VERIFICACIONES OBLIGATORIAS (todas deben cumplirse para ser válido):
+1. ¿El estado dice explícitamente "Comprobante de transferencia" o "Transferencia recibida"? Si dice "enviada", "en proceso" o no está claro: INVÁLIDO.
+2. ¿El monto coincide exactamente con $${expectedTotal}? Tolerancia: $0.
+3. ¿La fecha es de hoy ${expectedDate}? Si es de otro día: INVÁLIDO.
+4. ¿La hora está dentro de los últimos 30 minutos respecto a ${expectedTime}? Si es más antigua: INVÁLIDO.
+5. ¿El destinatario coincide con el alias "${businessAlias}" o el titular "${holderName}"? Buscar en el campo "Para" o "Destinatario".
+6. ¿Tiene número de operación o ID de transacción visible?
+7. ¿La imagen parece ser una captura real de una app bancaria o billetera virtual? Si parece editada, con fuentes inconsistentes, o datos superpuestos artificialmente: INVÁLIDO.
+
+Extraé también:
+- CUIT/CUIL del emisor (campo "De" o similar)
+- Número de operación/transacción
+
+Respondé ÚNICAMENTE con este JSON válido:
 {
   "valid": true o false,
-  "transaction_id": "string",
-  "issuer_cuit_cuil": "string (o null si no lo encuentra)",
+  "transaction_id": "string o null",
+  "issuer_cuit_cuil": "string o null",
   "detected_amount": numero,
-  "detected_datetime": "fecha y hora",
-  "reason": "Explicación breve de por qué es válido o inválido"
+  "detected_datetime": "string",
+  "reason": "Explicación clara de por qué es válido o cuál verificación falló"
 }` 
             },
             { 
