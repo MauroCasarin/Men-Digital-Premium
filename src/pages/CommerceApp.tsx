@@ -388,7 +388,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
       const { error } = await supabase
         .from('orders')
         .delete()
-        .eq('status', 'completed');
+        .in('status', ['completed', 'delivered']);
       
       if (error) throw error;
       setOrders(prev => prev.filter(o => !['delivered', 'completed'].includes(o.status)));
