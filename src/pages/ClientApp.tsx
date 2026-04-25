@@ -44,6 +44,7 @@ export default function ClientApp() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verdict, setVerdict] = useState<{valid: boolean, reason: string} | null>(null);
   const [paymentMode, setPaymentMode] = useState<'select' | 'transfer'>('select');
+  const [originalReceiptImage, setOriginalReceiptImage] = useState<string | null>(null);
   const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '', holder_name: '', name: 'TU NOMBRE.MENU', logo_url: '', categories: ['Menú', 'Bebidas'], theme: { accent: '#FFCC00', bg: '#0A0A0A', card: '#141414' } });
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
@@ -401,6 +402,7 @@ export default function ClientApp() {
         const croppedImage = await getCroppedImg(imageToCrop, croppedAreaPixels);
         setReceiptImage(croppedImage);
         setImageToCrop(null);
+        setOriginalReceiptImage(null);
       }
     } catch (e) {
       console.error(e);
@@ -907,7 +909,7 @@ export default function ClientApp() {
                              <div className="flex flex-col gap-3">
                                <div 
                                  className="relative h-48 rounded-xl overflow-hidden border border-[#444] cursor-pointer group"
-                                 onClick={() => { setImageToCrop(receiptImage); setReceiptImage(null); setVerdict(null); }}
+                                 onClick={() => { setOriginalReceiptImage(receiptImage); setImageToCrop(receiptImage); setReceiptImage(null); setVerdict(null); }}
                                >
                                  <img src={receiptImage} alt="Comprobante" className="w-full h-full object-cover group-hover:opacity-50 transition-opacity" />
                                  <button 
@@ -1085,13 +1087,16 @@ export default function ClientApp() {
                    image={imageToCrop}
                    crop={crop}
                    zoom={zoom}
+                   cropShape="rect"
+                   restrictPosition={false}
+                   initialCroppedAreaPercentages={{ x: 0, y: 0, width: 100, height: 100 }}
                    onCropChange={setCrop}
                    onCropComplete={onCropComplete}
                    onZoomChange={setZoom}
                  />
                </div>
                <div className="bg-[#111] p-6 flex justify-between items-center z-[101]">
-                 <button onClick={() => setImageToCrop(null)} className="px-6 py-3 bg-red-500 rounded-xl text-white font-bold">Cancelar</button>
+                 <button onClick={() => { setImageToCrop(null); if (originalReceiptImage) { setReceiptImage(originalReceiptImage); setOriginalReceiptImage(null); } }} className="px-6 py-3 bg-red-500 rounded-xl text-white font-bold">Cancelar</button>
                  <button onClick={showCroppedImage} className="px-6 py-3 bg-accent rounded-xl text-black font-bold flex gap-2 items-center"><Crop size={18} /> Recortar</button>
                </div>
              </div>
@@ -1325,7 +1330,7 @@ export default function ClientApp() {
                               <div className="flex flex-col gap-4">
                                 <div 
                                   className="relative h-48 rounded-xl overflow-hidden border border-[#222] cursor-pointer group"
-                                  onClick={() => { setImageToCrop(receiptImage); setReceiptImage(null); setVerdict(null); }}
+                                  onClick={() => { setOriginalReceiptImage(receiptImage); setImageToCrop(receiptImage); setReceiptImage(null); setVerdict(null); }}
                                 >
                                   <img src={receiptImage} alt="Recibo" className="w-full h-full object-cover group-hover:opacity-50 transition-opacity" />
                                   <button className="absolute top-2 right-2 bg-[#222] text-white rounded-lg px-3 py-1.5 shadow-xl flex items-center gap-1 text-xs font-bold pointer-events-none">
