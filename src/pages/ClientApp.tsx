@@ -5,7 +5,8 @@
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import Cropper from 'react-easy-crop';
+import ReactCrop, { type Crop as CropType, centerCrop, makeAspectCrop } from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 import { 
   ShoppingBag, 
   Plus, 
@@ -38,9 +39,9 @@ export default function ClientApp() {
   // New states for payment / AI verification
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
-  const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [crop, setCrop] = useState<CropType>();
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [rawImage, setRawImage] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verdict, setVerdict] = useState<{valid: boolean, reason: string} | null>(null);
   const [paymentMode, setPaymentMode] = useState<'select' | 'transfer'>('select');
@@ -360,53 +361,36 @@ export default function ClientApp() {
     }
   };
 
-  const onCropComplete = useCallback((croppedArea: any, croppedAreaPixels: any) => {
-    setCroppedAreaPixels(croppedAreaPixels);
-  }, []);
-
-  const getCroppedImg = async (imageSrc: string, cropPercent: any): Promise<string> => {
-    const image = new Image();
-    image.src = imageSrc;
-    await new Promise((resolve) => (image.onload = resolve));
-    
-    const canvas = document.createElement('canvas');
-    const pixelRatio = window.devicePixelRatio;
-    
-    // Convert percentage values to pixels
-    const cropX = (cropPercent.x / 100) * image.width;
-    const cropY = (cropPercent.y / 100) * image.height;
-    const cropWidth = (cropPercent.width / 100) * image.width;
-    const cropHeight = (cropPercent.height / 100) * image.height;
-
-    canvas.width = cropWidth;
-    canvas.height = cropHeight;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return '';
-    ctx.drawImage(
-      image,
-      cropX,
-      cropY,
-      cropWidth,
-      cropHeight,
-      0,
-      0,
-      cropWidth,
-      cropHeight
+  const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { width, height } = e.currentTarget;
+    const initialCrop = centerCrop(
+      makeAspectCrop({ unit: '%', width: 90 }, width / height, width, height),
+      width, height
     );
-    return canvas.toDataURL('image/jpeg', 0.8);
+    setCrop(initialCrop);
   };
 
-  const showCroppedImage = async () => {
-    try {
-      if (imageToCrop && croppedAreaPixels) {
-        const croppedImage = await getCroppedImg(imageToCrop, croppedAreaPixels);
-        setReceiptImage(croppedImage);
-        setImageToCrop(null);
-        setOriginalReceiptImage(null);
-      }
-    } catch (e) {
-      console.error(e);
-    }
+  const showCroppedImage = () => {
+    if (!imgRef.current || !crop) return;
+    const image = imgRef.current;
+    const canvas = document.createElement('canvas');
+    const scaleX = image.naturalWidth / image.width;
+    const scaleY = image.naturalHeight / image.height;
+    canvas.width = (crop.width / 100) * image.naturalWidth;
+    canvas.height = (crop.height / 100) * image.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(
+      image,
+      (crop.x / 100) * image.naturalWidth,
+      (crop.y / 100) * image.naturalHeight,
+      canvas.width,
+      canvas.height,
+      0, 0, canvas.width, canvas.height
+    );
+    setReceiptImage(canvas.toDataURL('image/jpeg', 0.9));
+    setImageToCrop(null);
+    setOriginalReceiptImage(null);
   };
 
   useEffect(() => {
@@ -425,6 +409,7 @@ export default function ClientApp() {
               const reader = new FileReader();
               reader.onload = (event) => {
                 setImageToCrop(event.target?.result as string);
+                setRawImage(event.target?.result as string);
               };
               reader.readAsDataURL(file);
             }
@@ -448,6 +433,7 @@ export default function ClientApp() {
       const reader = new FileReader();
       reader.onload = (event) => {
         setImageToCrop(event.target?.result as string);
+        setRawImage(event.target?.result as string);
       };
       reader.readAsDataURL(file);
     }
@@ -909,7 +895,7 @@ export default function ClientApp() {
                              <div className="flex flex-col gap-3">
                                <div 
                                  className="relative h-48 rounded-xl overflow-hidden border border-[#444] cursor-pointer group"
-                                 onClick={() => { setOriginalReceiptImage(receiptImage); setImageToCrop(receiptImage); setReceiptImage(null); setVerdict(null); }}
+                                 onClick={() => { setOriginalReceiptImage(receiptImage); setImageToCrop(rawImage || receiptImage); setReceiptImage(null); setVerdict(null); }}
                                >
                                  <img src={receiptImage} alt="Comprobante" className="w-full h-full object-cover group-hover:opacity-50 transition-opacity" />
                                  <button 
@@ -1081,25 +1067,27 @@ export default function ClientApp() {
 
           {/* Render cropper outside to cover everything when cropping */}
           {imageToCrop && (
-             <div className="fixed inset-0 z-[100] bg-black flex flex-col">
-               <div className="relative flex-1">
-                 <Cropper
-                   image={imageToCrop}
-                   crop={crop}
-                   zoom={zoom}
-                   cropShape="rect"
-                   restrictPosition={false}
-                   initialCroppedAreaPercentages={{ x: 0, y: 0, width: 100, height: 100 }}
-                   onCropChange={setCrop}
-                   onCropComplete={onCropComplete}
-                   onZoomChange={setZoom}
-                 />
-               </div>
-               <div className="bg-[#111] p-6 flex justify-between items-center z-[101]">
-                 <button onClick={() => { setImageToCrop(null); if (originalReceiptImage) { setReceiptImage(originalReceiptImage); setOriginalReceiptImage(null); } }} className="px-6 py-3 bg-red-500 rounded-xl text-white font-bold">Cancelar</button>
-                 <button onClick={showCroppedImage} className="px-6 py-3 bg-accent rounded-xl text-black font-bold flex gap-2 items-center"><Crop size={18} /> Recortar</button>
-               </div>
-             </div>
+            <div className="fixed inset-0 z-[100] bg-black flex flex-col">
+              <div className="relative flex-1 overflow-auto flex items-center justify-center p-4">
+                <ReactCrop
+                  crop={crop}
+                  onChange={c => setCrop(c)}
+                  style={{ maxHeight: '80vh' }}
+                >
+                  <img
+                    ref={imgRef}
+                    src={imageToCrop}
+                    onLoad={onImageLoad}
+                    style={{ maxHeight: '75vh', maxWidth: '100%' }}
+                    alt="Comprobante"
+                  />
+                </ReactCrop>
+              </div>
+              <div className="bg-[#111] p-6 flex justify-between items-center z-[101]">
+                <button onClick={() => { setImageToCrop(null); if (originalReceiptImage) { setReceiptImage(originalReceiptImage); setOriginalReceiptImage(null); } }} className="px-6 py-3 bg-red-500 rounded-xl text-white font-bold">Cancelar</button>
+                <button onClick={showCroppedImage} className="px-6 py-3 bg-accent rounded-xl text-black font-bold flex gap-2 items-center"><Crop size={18}/> Recortar</button>
+              </div>
+            </div>
           )}
 
       {/* Cart Mobile Overlay - Re-implementing with Bento styling */}
@@ -1330,7 +1318,7 @@ export default function ClientApp() {
                               <div className="flex flex-col gap-4">
                                 <div 
                                   className="relative h-48 rounded-xl overflow-hidden border border-[#222] cursor-pointer group"
-                                  onClick={() => { setOriginalReceiptImage(receiptImage); setImageToCrop(receiptImage); setReceiptImage(null); setVerdict(null); }}
+                                  onClick={() => { setOriginalReceiptImage(receiptImage); setImageToCrop(rawImage || receiptImage); setReceiptImage(null); setVerdict(null); }}
                                 >
                                   <img src={receiptImage} alt="Recibo" className="w-full h-full object-cover group-hover:opacity-50 transition-opacity" />
                                   <button className="absolute top-2 right-2 bg-[#222] text-white rounded-lg px-3 py-1.5 shadow-xl flex items-center gap-1 text-xs font-bold pointer-events-none">
