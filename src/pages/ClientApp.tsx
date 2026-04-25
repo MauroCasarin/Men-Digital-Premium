@@ -4,9 +4,8 @@
  */
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence, useScroll, useTransform, useMotionValue } from 'motion/react';
-import ReactCrop, { type Crop as CropType } from 'react-image-crop';
-import 'react-image-crop/dist/ReactCrop.css';
+import { motion, AnimatePresence } from 'motion/react';
+import Cropper from 'react-easy-crop';
 import { 
   ShoppingBag, 
   Plus, 
@@ -19,71 +18,11 @@ import {
   ChevronRight,
   CheckCircle,
   UtensilsCrossed,
-  Crop,
-  Cog,
-  Package,
-  CheckCircle2,
-  ThumbsUp
+  Crop
 } from 'lucide-react';
 import { Product, CartItem, Order } from '../types';
 import { PRODUCTS, WHATSAPP_PHONE } from '../constants';
 import { supabase } from '../lib/supabase';
-
-// Componente para efecto Parallax
-function ParallaxImage({ src, alt, className, intensity = 1 }: { src: string, alt?: string, className?: string, intensity?: number }) {
-  const ref = useRef<HTMLDivElement>(null);
-  
-  // Efecto por Scroll
-  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
-  const scrollY = useTransform(scrollYProgress, [0, 1], [-20 * intensity, 20 * intensity]);
-
-  // Efecto por Sensor Giroscopio/Acelerómetro
-  const deviceX = useMotionValue(0);
-  const deviceY = useMotionValue(0);
-
-  useEffect(() => {
-    if (intensity === 0) return;
-    
-    const handleOrientation = (event: DeviceOrientationEvent) => {
-      // Gamma es el ángulo Izaquierda/Derecha (-90 a 90)
-      // Beta es el ángulo Arriba/Abajo (-180 a 180)
-      const gamma = event.gamma || 0; 
-      const beta = event.beta || 45; // Asumimos 45 grados como posición neutral en la mano
-      
-      const tiltX = Math.min(Math.max(gamma / 45, -1), 1);
-      const tiltY = Math.min(Math.max((beta - 45) / 45, -1), 1);
-      
-      deviceX.set(tiltX * 10 * intensity);
-      deviceY.set(tiltY * 10 * intensity);
-    };
-
-    if (typeof window !== 'undefined' && window.DeviceOrientationEvent) {
-       window.addEventListener('deviceorientation', handleOrientation);
-    }
-    
-    return () => {
-      if (typeof window !== 'undefined' && window.DeviceOrientationEvent) {
-         window.removeEventListener('deviceorientation', handleOrientation);
-      }
-    };
-  }, [intensity, deviceX, deviceY]);
-
-  // Combinar ambos valores para el eje Y, y usar solo dispositivo para el X
-  const combinedY = useTransform(() => `calc(${scrollY.get()}% + ${deviceY.get()}%)`);
-  const finalX = useTransform(() => `${deviceX.get()}%`);
-  
-  return (
-    <div ref={ref} className={`relative overflow-hidden ${className}`}>
-      <motion.img 
-        src={src} 
-        alt={alt}
-        style={{ x: finalX, y: combinedY, scale: 1.25 + (intensity * 0.1) }}
-        className="absolute inset-[-20%] w-[140%] h-[140%] object-cover origin-center"
-        referrerPolicy="no-referrer"
-      />
-    </div>
-  );
-}
 
 export default function ClientApp() {
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -96,16 +35,12 @@ export default function ClientApp() {
   const [activeOrderStatus, setActiveOrderStatus] = useState<string>('');
   const [toastNotification, setToastNotification] = useState<{title: string, body: string, status: string} | null>(null);
   
-  const [showHistory, setShowHistory] = useState(false);
-  const [pastOrders, setPastOrders] = useState<Order[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-
   // New states for payment / AI verification
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
-  const [crop, setCrop] = useState<CropType>({ unit: '%', width: 50, height: 50, x: 25, y: 25 });
-  const [completedCrop, setCompletedCrop] = useState<CropType | null>(null);
-  const imgRef = useRef<HTMLImageElement | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verdict, setVerdict] = useState<{valid: boolean, reason: string} | null>(null);
   const [paymentMode, setPaymentMode] = useState<'select' | 'transfer'>('select');
@@ -120,32 +55,8 @@ export default function ClientApp() {
     }
   }, [businessSettings.theme]);
 
-  const fetchHistory = async () => {
-    if (!customerName.trim()) {
-      alert('Debes realizar un pedido al menos una vez para ver tu historial.');
-      return;
-    }
-    setIsLoadingHistory(true);
-    setShowHistory(true);
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .ilike('customer_name', customerName.trim())
-        .order('created_at', { ascending: false });
-        
-      if (error) throw error;
-      setPastOrders((data as Order[]) || []);
-    } catch (e) {
-      console.error(e);
-      alert('Error cargando el historial.');
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  };
-
   // Safe global audio context to prevent creating >6 contexts per session (which crashes iOS/Safari).
-  const getAudioContext = useMemo(() => {
+  const getAudioContext = (() => {
     let ctx: AudioContext | null = null;
     return () => {
       if (!ctx) {
@@ -157,9 +68,9 @@ export default function ClientApp() {
       }
       return ctx;
     };
-  }, []);
+  })();
 
-  const playNotificationSound = useCallback(() => {
+  const playNotificationSound = () => {
     try {
       const audioCtx = getAudioContext();
       if (!audioCtx) return;
@@ -168,21 +79,24 @@ export default function ClientApp() {
         audioCtx.resume().catch(e => console.warn(e));
       }
       
+      const theme = businessSettings.theme || {};
+      const sType = theme.client_sound_type || 'square';
+      const sVol = theme.client_sound_volume !== undefined ? theme.client_sound_volume : 0.3;
+      const freqMult = theme.client_sound_freq_mult || 1.0;
+      
+      if (sVol <= 0) return; // Muted
+
       const playBeep = (freq: number, startTime: number) => {
         const oscillator = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
         oscillator.connect(gainNode);
         gainNode.connect(audioCtx.destination);
-        
-        oscillator.type = businessSettings.theme?.client_sound_type || 'square';
-        
-        const freqMult = businessSettings.theme?.sound_freq_mult || 1.0;
+        oscillator.type = sType as OscillatorType;
         oscillator.frequency.setValueAtTime(freq * freqMult, startTime);
-        
-        const vol = businessSettings.theme?.sound_volume !== undefined ? businessSettings.theme.sound_volume : 0.5;
-        gainNode.gain.setValueAtTime(vol * 0.5, startTime);
-        oscillator.start(startTime);
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(sVol, startTime + 0.1);
         gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.3);
+        oscillator.start(startTime);
         oscillator.stop(startTime + 0.3);
       };
       
@@ -191,7 +105,7 @@ export default function ClientApp() {
       playBeep(1500, t + 0.15);
       playBeep(1800, t + 0.3);
     } catch(e) {}
-  }, [businessSettings, getAudioContext]);
+  };
 
   useEffect(() => {
     let alertInterval: NodeJS.Timeout;
@@ -331,7 +245,6 @@ export default function ClientApp() {
             logo_url: data.logo_url || '',
             categories: data.categories || ['Menú', 'Bebidas'],
             theme: {
-              ...data.theme,
               accent: data.theme?.accent || '#FFCC00',
               bg: data.theme?.bg || '#0A0A0A',
               card: data.theme?.card || '#141414',
@@ -371,7 +284,6 @@ export default function ClientApp() {
             logo_url: data.logo_url || '',
             categories: data.categories || ['Menú', 'Bebidas'],
             theme: {
-              ...data.theme,
               accent: data.theme?.accent || '#FFCC00',
               bg: data.theme?.bg || '#0A0A0A',
               card: data.theme?.card || '#141414',
@@ -447,60 +359,46 @@ export default function ClientApp() {
     }
   };
 
-  const clearClientHistory = async () => {
-    if (!customerName) return;
-    if (!window.confirm("¿Estás seguro de que deseas eliminar tu historial de pedidos completados/entregados?")) return;
-    try {
-      setIsLoadingHistory(true);
-      const { error } = await supabase
-        .from('orders')
-        .delete()
-        .in('status', ['completed', 'delivered'])
-        .ilike('customer_name', customerName.trim());
-      
-      if (error) throw error;
-      setPastOrders(pastOrders.filter(o => !['completed', 'delivered'].includes(o.status)));
-      alert("Historial completado eliminado.");
-    } catch (e) {
-      console.error(e);
-      alert("Error al eliminar el historial.");
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  };
+  const onCropComplete = useCallback((croppedArea: any, croppedAreaPixels: any) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
 
-  const getCroppedImg = (image: HTMLImageElement, pixelCrop: CropType): string => {
-    const canvas = document.createElement('canvas');
-    const scaleX = image.naturalWidth / image.width;
-    const scaleY = image.naturalHeight / image.height;
+  const getCroppedImg = async (imageSrc: string, cropPercent: any): Promise<string> => {
+    const image = new Image();
+    image.src = imageSrc;
+    await new Promise((resolve) => (image.onload = resolve));
     
-    canvas.width = pixelCrop.width * scaleX;
-    canvas.height = pixelCrop.height * scaleY;
+    const canvas = document.createElement('canvas');
+    const pixelRatio = window.devicePixelRatio;
+    
+    // Convert percentage values to pixels
+    const cropX = (cropPercent.x / 100) * image.width;
+    const cropY = (cropPercent.y / 100) * image.height;
+    const cropWidth = (cropPercent.width / 100) * image.width;
+    const cropHeight = (cropPercent.height / 100) * image.height;
+
+    canvas.width = cropWidth;
+    canvas.height = cropHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) return '';
-    
-    // Better rendering quality
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    
     ctx.drawImage(
       image,
-      pixelCrop.x * scaleX,
-      pixelCrop.y * scaleY,
-      pixelCrop.width * scaleX,
-      pixelCrop.height * scaleY,
+      cropX,
+      cropY,
+      cropWidth,
+      cropHeight,
       0,
       0,
-      canvas.width,
-      canvas.height
+      cropWidth,
+      cropHeight
     );
     return canvas.toDataURL('image/jpeg', 0.8);
   };
 
-  const showCroppedImage = () => {
+  const showCroppedImage = async () => {
     try {
-      if (imageToCrop && completedCrop && imgRef.current) {
-        const croppedImage = getCroppedImg(imgRef.current, completedCrop);
+      if (imageToCrop && croppedAreaPixels) {
+        const croppedImage = await getCroppedImg(imageToCrop, croppedAreaPixels);
         setReceiptImage(croppedImage);
         setImageToCrop(null);
       }
@@ -672,7 +570,7 @@ export default function ClientApp() {
           <div className="flex items-center justify-between">
             <motion.div whileHover={{ scale: 1.05 }} className="flex items-center gap-3 cursor-default">
               {businessSettings.logo_url && <img src={businessSettings.logo_url} alt="Logo" className="h-10 w-auto rounded object-cover" />}
-                           <span className="text-xl sm:text-2xl font-extrabold tracking-tighter">{businessSettings.name || 'TU NOMBRE.MENU'}</span>
+              <span className="text-xl sm:text-2xl font-extrabold tracking-tighter">{businessSettings.name}</span>
             </motion.div>
             <div className="flex items-center gap-2">
               <button 
@@ -723,9 +621,9 @@ export default function ClientApp() {
                 onClick={e => e.stopPropagation()}
               >
                  <button onClick={() => setSelectedProduct(null)} className="absolute top-4 right-4 text-white p-2 bg-black/50 rounded-full hover:bg-black/80 transition-colors z-10"><X size={20}/></button>
-                 <div className="relative overflow-hidden rounded-2xl mb-4">
-                   <ParallaxImage src={selectedProduct.image} intensity={businessSettings.theme?.parallax_intensity !== undefined ? businessSettings.theme.parallax_intensity / 100 : 1} className="w-full h-48 sm:h-64" />
-                   <div className="absolute inset-0 bg-linear-to-t from-[#1a1810] via-transparent to-transparent" />
+                 <div className="relative">
+                   <img src={selectedProduct.image} className="w-full h-48 sm:h-64 object-cover rounded-2xl mb-4" referrerPolicy="no-referrer" />
+                   <div className="absolute inset-0 bg-linear-to-t from-[#1a1810] via-transparent to-transparent rounded-2xl" />
                  </div>
                  <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">{selectedProduct.name}</h2>
                  <p className="text-sm sm:text-base text-gray-400 mb-6">{selectedProduct.description}</p>
@@ -774,11 +672,11 @@ export default function ClientApp() {
             <div className="absolute inset-0 bg-black/70 mix-blend-multiply" />
             
             <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 relative z-10 border border-white/10 shadow-lg">
-               <ParallaxImage 
+               <img 
                 src={product.image || `https://picsum.photos/seed/${product.name}/500/300?blur=2`} 
                 alt={product.name}
-                intensity={businessSettings.theme?.parallax_intensity !== undefined ? businessSettings.theme.parallax_intensity / 100 : 1}
-                className="w-full h-full" 
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover" 
               />
             </div>
             
@@ -819,8 +717,8 @@ export default function ClientApp() {
                         <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity, duration: 1 }}>
                            <Clock size={80} className="text-orange-500 mb-4 mx-auto" />
                         </motion.div>
-                        <h3 className="text-2xl font-bold text-white tracking-tight text-orange-500">¡Pedido en movimiento!</h3>
-                        <p className="text-sm text-text-dim">El pedido se encuentra en tránsito o entrega.</p>
+                        <h3 className="text-2xl font-bold text-white tracking-tight text-orange-500">¡Ve al mostrador!</h3>
+                        <p className="text-sm text-text-dim">Te estamos esperando para entregarte tu pedido.</p>
                      </>
                    ) : activeOrderStatus === 'ready' ? (
                      <>
@@ -829,33 +727,25 @@ export default function ClientApp() {
                            animate={{ scale: [0.8, 1.2, 1] }} 
                            transition={{ duration: 0.5, type: 'spring' }}
                         >
-                           <Package size={80} className="text-accent mb-4 mx-auto drop-shadow-[0_0_15px_rgba(255,204,0,0.5)]" />
+                           <UtensilsCrossed size={80} className="text-accent mb-4 mx-auto drop-shadow-[0_0_15px_rgba(255,204,0,0.5)]" />
                         </motion.div>
-                        <h3 className="text-3xl font-black text-accent tracking-tighter">¡PEDIDO LISTO!</h3>
-                        <p className="text-base text-gray-300 font-medium w-full">Nombre registrado para la entrega:<br/><span className="text-white font-black text-xl bg-[#222] px-4 py-2 rounded-xl inline-block mt-3 border border-border-dark w-full text-center">{customerName}</span></p>
+                        <h3 className="text-3xl font-black text-accent tracking-tighter">¡PEDIDO LISTO<br/>PARA RETIRAR!</h3>
+                        <p className="text-base text-gray-300 font-medium w-full">Acércate al mostrador indicando el nombre:<br/><span className="text-white font-black text-xl bg-[#222] px-4 py-2 rounded-xl inline-block mt-3 border border-border-dark w-full">{customerName}</span></p>
                         
                         <button 
                           onClick={handleOnTheWay}
                           className="mt-6 w-full py-4 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-xl shadow-orange-500/20 transition-all uppercase tracking-widest text-xs"
                         >
-                          Estoy atento / En camino
+                          Estoy en camino a retirar
                         </button>
                      </>
                    ) : activeOrderStatus === 'preparing' ? (
                      <>
                         <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 8, ease: 'linear' }}>
-                           <Cog size={64} className="text-blue-400 mb-2 mx-auto" />
+                           <UtensilsCrossed size={64} className="text-blue-400 mb-2 mx-auto" />
                         </motion.div>
                         <h3 className="text-2xl font-bold text-white tracking-tight">Preparando tu pedido</h3>
                         <p className="text-sm text-text-dim">¡El comercio ya está trabajando en lo tuyo!</p>
-                     </>
-                   ) : ['delivered', 'completed'].includes(activeOrderStatus) ? (
-                     <>
-                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1, rotate: [0, 10, -10, 0] }} transition={{ type: 'spring', damping: 15 }}>
-                           <CheckCircle2 size={80} className="text-green-500 mb-4 mx-auto" />
-                        </motion.div>
-                        <h3 className="text-3xl font-black text-green-500 tracking-tighter">PEDIDO ENTREGADO</h3>
-                        <p className="text-base text-gray-300 font-medium w-full text-center">¡Gracias por tu compra!</p>
                      </>
                    ) : (
                      <>
@@ -872,7 +762,7 @@ export default function ClientApp() {
                    className="flex flex-col gap-4 py-4"
                  >
                    <h3 className="text-lg font-bold text-white mb-2">¿A nombre de quién?</h3>
-                   <p className="text-xs text-text-dim mb-2">Necesitamos un nombre para identificarte.</p>
+                   <p className="text-xs text-text-dim mb-2">Ingresa tu nombre para identificarte al retirar.</p>
                    <input
                      type="text"
                      value={customerName}
@@ -1054,7 +944,7 @@ export default function ClientApp() {
                   >
                     <div className="flex gap-4 items-center">
                       <div className="w-12 h-12 rounded-xl overflow-hidden bg-[#222] shadow-lg flex-shrink-0">
-                        <ParallaxImage src={item.product.image} intensity={businessSettings.theme?.parallax_intensity !== undefined ? businessSettings.theme.parallax_intensity / 100 : 1} className="w-full h-full" alt="" />
+                        <img src={item.product.image} className="w-full h-full object-cover" alt="" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-bold text-white truncate group-hover:text-accent transition-colors">{item.product.name}</h4>
@@ -1160,19 +1050,16 @@ export default function ClientApp() {
           {/* Render cropper outside to cover everything when cropping */}
           {imageToCrop && (
              <div className="fixed inset-0 z-[100] bg-black flex flex-col">
-               <div className="relative flex-1 flex items-center justify-center p-4 overflow-auto">
-                 <ReactCrop
+               <div className="relative flex-1">
+                 <Cropper
+                   image={imageToCrop}
                    crop={crop}
-                   onChange={(_, percentCrop) => setCrop(percentCrop)}
-                   onComplete={(c) => setCompletedCrop(c)}
-                 >
-                   <img 
-                     ref={imgRef} 
-                     alt="Recorte" 
-                     src={imageToCrop} 
-                     className="max-h-[70vh] object-contain"
-                   />
-                 </ReactCrop>
+                   zoom={zoom}
+                   aspect={16 / 9}
+                   onCropChange={setCrop}
+                   onCropComplete={onCropComplete}
+                   onZoomChange={setZoom}
+                 />
                </div>
                <div className="bg-[#111] p-6 flex justify-between items-center z-[101]">
                  <button onClick={() => setImageToCrop(null)} className="px-6 py-3 bg-red-500 rounded-xl text-white font-bold">Cancelar</button>
@@ -1218,8 +1105,8 @@ export default function ClientApp() {
                            <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity, duration: 1 }}>
                               <Clock size={80} className="text-orange-500 mb-4 mx-auto" />
                            </motion.div>
-                           <h3 className="text-2xl font-bold tracking-tight text-orange-500">¡Pedido en movimiento!</h3>
-                           <p className="text-sm text-text-dim text-center">El pedido se encuentra en tránsito o entrega.</p>
+                           <h3 className="text-2xl font-bold tracking-tight text-orange-500">¡Ve al mostrador!</h3>
+                           <p className="text-sm text-text-dim text-center">Te estamos esperando para entregarte tu pedido.</p>
                         </>
                       ) : activeOrderStatus === 'ready' ? (
                         <>
@@ -1228,34 +1115,26 @@ export default function ClientApp() {
                               animate={{ scale: [0.8, 1.2, 1] }} 
                               transition={{ duration: 0.5, type: 'spring' }}
                            >
-                              <Package size={80} className="text-accent mb-4 mx-auto" />
+                              <UtensilsCrossed size={80} className="text-accent mb-4 mx-auto" />
                            </motion.div>
                            <h3 className="text-3xl font-black text-accent tracking-tighter">¡PEDIDO LISTO!</h3>
-                        <p className="text-base text-gray-300 font-medium">Nombre registrado para la entrega:<br/><span className="text-white font-black text-xl bg-[#222] px-4 py-2 rounded-xl inline-block mt-3 border border-border-dark w-full text-center">{customerName}</span></p>
+                           <p className="text-base text-gray-300 font-medium">Acércate al mostrador indicando:<br/><span className="text-white font-black text-xl bg-[#222] px-4 py-2 rounded-xl inline-block mt-3 border border-border-dark">{customerName}</span></p>
                            
                            <button 
                              onClick={handleOnTheWay}
                              className="mt-6 w-full py-4 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-xl shadow-orange-500/20 transition-all uppercase tracking-widest text-xs"
                            >
-                             Estoy atento / En camino
+                             Estoy en camino a retirar
                            </button>
                         </>
                       ) : activeOrderStatus === 'preparing' ? (
                         <>
                            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 8, ease: 'linear' }}>
-                              <Cog size={64} className="text-blue-400 mb-2 mx-auto" />
+                              <UtensilsCrossed size={64} className="text-blue-400 mb-2 mx-auto" />
                            </motion.div>
                            <h3 className="text-2xl font-bold text-white tracking-tight">Preparando pedido</h3>
                            <p className="text-sm text-text-dim">¡El comercio ya está trabajando en lo tuyo!</p>
                         </>
-                      ) : ['delivered', 'completed'].includes(activeOrderStatus) ? (
-                         <>
-                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1, rotate: [0, 10, -10, 0] }} transition={{ type: 'spring', damping: 15 }}>
-                               <CheckCircle2 size={80} className="text-green-500 mb-4 mx-auto" />
-                            </motion.div>
-                            <h3 className="text-3xl font-black text-green-500 tracking-tighter">PEDIDO ENTREGADO</h3>
-                            <p className="text-base text-gray-300 font-medium w-full text-center">¡Gracias por tu compra!</p>
-                         </>
                       ) : (
                         <>
                            <Clock size={64} className="text-yellow-500 mb-2 mx-auto animate-pulse" />
@@ -1272,7 +1151,7 @@ export default function ClientApp() {
                     >
                       <div className="bg-card-dark border border-border-dark p-6 rounded-2xl">
                         <h3 className="text-xl font-bold text-white mb-2 tracking-tight italic">¿A nombre de quién?</h3>
-                        <p className="text-xs text-text-dim mb-4 leading-relaxed">Necesitamos un nombre para identificarte.</p>
+                        <p className="text-xs text-text-dim mb-4 leading-relaxed">Necesitamos un nombre para identificarte cuando vengas al local a retirar tu pedido.</p>
                         <input
                          type="text"
                          value={customerName}
@@ -1467,9 +1346,7 @@ export default function ClientApp() {
                       {cart.map(item => (
                         <div key={item.product.id} className="flex flex-col gap-4 bg-card-dark p-4 rounded-2xl border border-border-dark shadow-xl">
                           <div className="flex gap-4 items-center">
-                            <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden shadow-lg">
-                               <ParallaxImage src={item.product.image} intensity={businessSettings.theme?.parallax_intensity !== undefined ? businessSettings.theme.parallax_intensity / 100 : 1} className="w-full h-full" alt="" />
-                            </div>
+                            <img src={item.product.image} className="w-16 h-16 rounded-xl object-cover shadow-lg" alt="" referrerPolicy="no-referrer" />
                             <div className="flex-1 min-w-0">
                               <h4 className="text-sm font-bold truncate text-white">{item.product.name}</h4>
                               <p className="text-accent font-black text-base">${(item.product.price).toFixed(2)}</p>
@@ -1564,89 +1441,7 @@ export default function ClientApp() {
         )}
       </AnimatePresence>
 
-      {/* History Modal Overlay */}
-      <AnimatePresence>
-        {showHistory && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-10">
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setShowHistory(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }} 
-              animate={{ opacity: 1, scale: 1, y: 0 }} 
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-2xl bg-card-dark border border-border-dark shadow-2xl rounded-3xl overflow-hidden flex flex-col max-h-[85vh]"
-            >
-              <div className="p-6 border-b border-border-dark flex items-center justify-between bg-[#111]">
-                <h2 className="text-2xl font-black tracking-tight flex items-center gap-3 text-white">
-                  <History size={28} className="text-accent" />
-                  HISTORIAL
-                </h2>
-                <div className="flex items-center gap-4">
-                  {pastOrders.some(o => ['completed', 'delivered'].includes(o.status)) && (
-                    <button onClick={clearClientHistory} className="text-xs text-red-500 font-bold hover:text-red-400 bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20">
-                      Eliminar
-                    </button>
-                  )}
-                  <button onClick={() => setShowHistory(false)} className="p-2 text-text-dim hover:text-white bg-[#222] rounded-full transition-colors">
-                    <X size={24} />
-                  </button>
-                </div>
-              </div>
-              
-              <div className="flex-1 overflow-auto p-6 scrollbar-thin scrollbar-thumb-accent/20">
-                {isLoadingHistory ? (
-                  <div className="h-40 flex flex-col items-center justify-center gap-4">
-                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
-                      <Clock size={32} className="text-accent" />
-                    </motion.div>
-                    <p className="text-text-dim font-bold animate-pulse">Cargando tu historial...</p>
-                  </div>
-                ) : pastOrders.length === 0 ? (
-                  <div className="h-40 flex flex-col items-center justify-center gap-4 text-text-dim text-center">
-                    <History size={48} className="opacity-20" />
-                    <p className="font-medium text-lg">Aún no tienes pedidos registrados<br/>con el nombre "{customerName}".</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {pastOrders.map(order => (
-                      <div key={order.id} className="bg-[#1a1a1a] border border-border-dark p-5 rounded-2xl">
-                        <div className="flex justify-between items-start mb-4 pb-4 border-b border-white/5">
-                          <div>
-                            <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">
-                              {new Date(order.created_at).toLocaleDateString()} - {new Date(order.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                            </span>
-                            <h4 className="text-lg font-bold text-white mt-1">Orden #{order.id.split('-')[0].toUpperCase()}</h4>
-                          </div>
-                          <div className="text-right">
-                            <span className="block text-xl font-black text-accent">${order.total.toFixed(2)}</span>
-                            <span className={`inline-block mt-1 text-[10px] uppercase font-bold px-2 py-0.5 rounded border 
-                              ${order.status === 'completed' ? 'bg-[#222] text-gray-400 border-gray-700' : 'bg-green-500/20 text-green-500 border-green-500/50'}`}>
-                              {order.status === 'completed' ? 'RETIRADO' : order.status === 'delivered' ? 'PEDIDO ENTREGADO' : 'EN CURSO'}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          {order.items.map((item, idx) => (
-                            <div key={idx} className="flex justify-between text-sm items-start gap-4">
-                              <span className="text-gray-300">
-                                <span className="font-bold text-white">{item.quantity}x</span> {item.product.name}
-                              </span>
-                              <span className="text-gray-500 whitespace-nowrap">${(item.product.price * item.quantity).toFixed(2)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* Modal Overlay is removed entirely */}
     </div>
   );
 }

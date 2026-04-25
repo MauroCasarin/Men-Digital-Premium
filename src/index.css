@@ -34,9 +34,3 @@
     @apply bg-card-dark border border-border-dark rounded-[20px] p-5 relative flex flex-col transition-all;
   }
 }
-
-/* User Focus Mode Requests */
-div#root:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(6) {
-    display: none !important;
-}
-

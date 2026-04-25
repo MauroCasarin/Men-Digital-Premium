@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { UtensilsCrossed, Clock, CheckCircle, Package, ChevronDown, ChevronUp, Settings, Plus, Save, Trash2, X } from 'lucide-react';
+import { UtensilsCrossed, Clock, CheckCircle, Package, ChevronDown, ChevronUp, Settings, Plus, Save, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Order, Product } from '../types';
 import { PRODUCTS } from '../constants';
@@ -53,7 +53,6 @@ export default function CommerceApp() {
             logo_url: settingsData.logo_url || '',
             categories: settingsData.categories || ['Menú', 'Bebidas'],
             theme: {
-              ...settingsData.theme, // Merge all other theme properties like sound and parallax
               accent: settingsData.theme?.accent || '#FFCC00',
               bg: settingsData.theme?.bg || '#0A0A0A',
               card: settingsData.theme?.card || '#141414',
@@ -148,7 +147,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
     };
   })();
 
-  const playNewOrderSound = (previewTheme?: any) => {
+  const playNewOrderSound = (previewTheme?: any, isClientPreview: boolean = false) => {
     try {
       const audioCtx = getCommerceAudioContext();
       if (!audioCtx) return;
@@ -159,9 +158,11 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
       }
       
       const theme = previewTheme || businessSettings.theme || {};
-      const sType = theme.sound_type || 'sine';
-      const sVol = theme.sound_volume !== undefined ? theme.sound_volume : 0.5;
-      const freqMult = theme.sound_freq_mult || 1.0;
+      const sType = isClientPreview ? (theme.client_sound_type || 'square') : (theme.sound_type || 'sine');
+      const sVol = isClientPreview 
+        ? (theme.client_sound_volume !== undefined ? theme.client_sound_volume : 0.3)
+        : (theme.sound_volume !== undefined ? theme.sound_volume : 0.5);
+      const freqMult = isClientPreview ? (theme.client_sound_freq_mult || 1.0) : (theme.sound_freq_mult || 1.0);
       
       if (sVol <= 0) return; // Muted
 
@@ -180,10 +181,16 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
       };
       
       const t = audioCtx.currentTime;
-      playChime(523.25, t);      // Do
-      playChime(659.25, t + 0.1); // Mi
-      playChime(783.99, t + 0.2); // Sol
-      playChime(1046.50, t + 0.3); // Do octava
+      if (isClientPreview) {
+        playChime(1200, t);
+        playChime(1500, t + 0.15);
+        playChime(1800, t + 0.3);
+      } else {
+        playChime(523.25, t);      // Do
+        playChime(659.25, t + 0.1); // Mi
+        playChime(783.99, t + 0.2); // Sol
+        playChime(1046.50, t + 0.3); // Do octava
+      }
     } catch (e) {
       console.warn("Could not play order sound:", e);
     }
@@ -325,12 +332,12 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
       name: newProductData.name || '', 
       description: newProductData.description || '', 
       price: Number(newProductData.price) || 0, 
-      category: newProductData.category || (businessSettings.categories.length > 0 ? businessSettings.categories[0] : 'Menú'), 
+      category: newProductData.category || (businessSettings.categories && businessSettings.categories.length > 0 ? businessSettings.categories[0] : 'Menú'), 
       image: newProductData.image || '', 
       is_recommendation: newProductData.is_recommendation || false 
     }, ...menuItems]);
     setIsAddModalOpen(false);
-    setNewProductData({ name: '', description: '', price: 0, category: businessSettings.categories.length > 0 ? businessSettings.categories[0] : 'Menú', image: '', is_recommendation: false });
+    setNewProductData({ name: '', description: '', price: 0, category: businessSettings.categories && businessSettings.categories.length > 0 ? businessSettings.categories[0] : 'Menú', image: '', is_recommendation: false });
   };
 
   const handleDeleteProduct = (id: string | number) => {
@@ -381,11 +388,10 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
       const { error } = await supabase
         .from('orders')
         .delete()
-        .in('status', ['completed', 'delivered']);
+        .eq('status', 'completed');
       
       if (error) throw error;
-      setOrders(orders.filter(o => !['completed', 'delivered'].includes(o.status)));
-      alert("Historial limpiado correctamente.");
+      alert("Historial limpiado correctamente");
     } catch (err: any) {
       console.error(err);
       alert("No se pudo limpiar el historial: " + err.message);
@@ -446,6 +452,12 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
               <p className="text-sm text-text-dim"> Suma más categorías según productos, para cobro on line agrega tus datos.</p>
             </div>
             <div className="flex flex-col w-full md:w-64 gap-3">
+              <button onClick={() => {
+                setNewProductData({ name: '', description: '', price: 0, category: businessSettings.categories && businessSettings.categories.length > 0 ? businessSettings.categories[0] : 'Menú', image: '', is_recommendation: false });
+                setIsAddModalOpen(true);
+              }} className="flex items-center justify-center gap-2 bg-[#333] hover:bg-[#444] text-white px-6 py-3 rounded-xl font-bold transition-colors w-full">
+                <Plus size={18} /> Agregar
+              </button>
               <button disabled={isSaving} onClick={saveMenuConfig} className="flex items-center justify-center gap-2 bg-accent hover:bg-yellow-400 text-black px-6 py-3 rounded-xl font-bold transition-colors w-full">
                 <Save size={18} /> {isSaving ? 'Guardando...' : 'Guardar Todo'}
               </button>
@@ -488,12 +500,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
                           setBusinessSettings({...businessSettings, theme: {...businessSettings.theme, hidden_categories: newHidden}});
                         }} title={isHidden ? 'Oculta al cliente. Clic para mostrar.' : 'Visible al cliente. Clic para ocultar.'}>
                           {cat}
-                          <button onClick={(e) => { 
-                            e.stopPropagation(); 
-                            if (window.confirm(`¿Estás seguro de que deseas eliminar la categoría "${cat}"?`)) {
-                              setBusinessSettings({...businessSettings, categories: businessSettings.categories.filter((_, idx) => idx !== i)}); 
-                            }
-                          }} className="hover:text-white"><Trash2 size={12}/></button>
+                          <button onClick={(e) => { e.stopPropagation(); setBusinessSettings({...businessSettings, categories: businessSettings.categories.filter((_, idx) => idx !== i)}); }} className="hover:text-white"><Trash2 size={12}/></button>
                         </span>
                       );
                     })}
@@ -583,22 +590,9 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
             // Creamos un estado local temporal para el collapse. Si quisiéramos estado real convendría extraer a un componente
             return (
                <details key={cat} className="group mt-8 bg-[#1a1a1a] p-4 rounded-2xl border border-border-dark" open={false}>
-                 <summary className="flex items-center justify-between mb-4 list-none select-none group-summary">
-                   <div className="text-lg font-bold text-accent p-2 bg-accent/10 rounded-lg inline-flex items-center cursor-pointer hover:bg-accent/20 transition-colors">
-                     {cat}
-                     <ChevronDown size={18} className="ml-2 transition-transform group-open:rotate-180" />
-                   </div>
-                   <button
-                     onClick={(e) => {
-                       e.preventDefault();
-                       e.stopPropagation();
-                       setNewProductData({ name: '', description: '', price: 0, category: cat, image: '', is_recommendation: false });
-                       setIsAddModalOpen(true);
-                     }}
-                     className="bg-[#333] hover:bg-[#444] text-white px-3 py-2 rounded-xl text-sm font-bold flex items-center gap-1 transition-colors z-10"
-                   >
-                     <Plus size={16} /> Agregar
-                   </button>
+                 <summary className="text-lg font-bold text-accent mb-4 p-2 bg-accent/10 rounded-lg inline-flex items-center cursor-pointer list-none select-none">
+                   {cat}
+                   <ChevronDown size={18} className="ml-2 transition-transform group-open:rotate-180" />
                  </summary>
                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
                   {menuItems.filter(p => p.category === cat).map((product) => {
@@ -707,31 +701,15 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
                </div>
                 <div className="mt-8 pt-6 border-t border-[#333]">
                  <h4 className="text-xs font-bold text-gray-400 block mb-4 uppercase tracking-wider">Sonido de Notificaciones</h4>
-                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                    <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Tipo (Comercio)</label>
+                     <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Tipo de Sonido</label>
                      <select 
                        value={businessSettings.theme?.sound_type || 'sine'} 
                        onChange={(e) => {
                          const updated = {...businessSettings, theme: {...businessSettings.theme, sound_type: e.target.value}};
                          setBusinessSettings(updated);
                          playNewOrderSound(updated.theme);
-                       }}
-                       className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-bold"
-                     >
-                       <option value="sine">Suave (Sine)</option>
-                       <option value="triangle">Agradable (Triangle)</option>
-                       <option value="square">Digital (Square)</option>
-                       <option value="sawtooth">Metálico (Sawtooth)</option>
-                     </select>
-                   </div>
-                   <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Tipo (Cliente)</label>
-                     <select 
-                       value={businessSettings.theme?.client_sound_type || 'square'} 
-                       onChange={(e) => {
-                         const updated = {...businessSettings, theme: {...businessSettings.theme, client_sound_type: e.target.value}};
-                         setBusinessSettings(updated);
                        }}
                        className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-bold"
                      >
@@ -761,7 +739,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
                    </div>
                    <div>
                      <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Volumen</label>
-                     <div className="flex bg-[#111] border border-[#333] rounded-xl overflow-hidden relative p-3 items-center gap-3 h-[46px]">
+                     <div className="flex bg-[#111] border border-[#333] rounded-xl overflow-hidden relative p-3 items-center gap-3">
                        <span className="text-sm">🔇</span>
                        <input 
                          type="range" 
@@ -788,27 +766,68 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
                </div>
 
                <div className="mt-8 pt-6 border-t border-[#333]">
-                 <h4 className="text-xs font-bold text-gray-400 block mb-4 uppercase tracking-wider">Efecto Visual (Parallax)</h4>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Intensidad del efecto en imágenes</label>
-                     <div className="flex bg-[#111] border border-[#333] rounded-xl overflow-hidden relative p-3 items-center gap-3">
-                       <span className="text-xs text-gray-400 font-bold w-12 text-center text-[10px]">OFF</span>
-                       <input 
-                         type="range" 
-                         min="0" max="250" step="10" 
-                         value={businessSettings.theme?.parallax_intensity !== undefined ? businessSettings.theme.parallax_intensity : 100} 
-                         onChange={(e) => {
-                           const updated = {...businessSettings, theme: {...businessSettings.theme, parallax_intensity: parseInt(e.target.value)}};
-                           setBusinessSettings(updated);
-                         }} 
-                         className="flex-1 accent-accent" 
-                       />
-                       <span className="text-xs text-accent font-black w-12 text-center text-[10px]">MAX</span>
-                     </div>
-                     <p className="text-[10px] text-gray-500 mt-2">Afecta el movimiento de las imágenes de comida al usar el rotación/giro del celular o al hacer scroll.</p>
-                   </div>
-                 </div>
+                  <h4 className="text-xs font-bold text-gray-400 block mb-4 uppercase tracking-wider">Sonido de Notificaciones (Para el Cliente)</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div>
+                      <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Tipo de Sonido</label>
+                      <select 
+                        value={businessSettings.theme?.client_sound_type || 'square'} 
+                        onChange={(e) => {
+                          const updated = {...businessSettings, theme: {...businessSettings.theme, client_sound_type: e.target.value}};
+                          setBusinessSettings(updated);
+                          playNewOrderSound(updated.theme, true);
+                        }}
+                        className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-bold"
+                      >
+                        <option value="sine">Suave (Sine)</option>
+                        <option value="triangle">Agradable (Triangle)</option>
+                        <option value="square">Digital (Square)</option>
+                        <option value="sawtooth">Metálico (Sawtooth)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Graves / Agudos</label>
+                      <select 
+                        value={businessSettings.theme?.client_sound_freq_mult || 1.0} 
+                        onChange={(e) => {
+                          const updated = {...businessSettings, theme: {...businessSettings.theme, client_sound_freq_mult: parseFloat(e.target.value)}};
+                          setBusinessSettings(updated);
+                          playNewOrderSound(updated.theme, true);
+                        }}
+                        className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-bold"
+                      >
+                        <option value="0.5">Muy Grave (x0.5)</option>
+                        <option value="0.75">Grave (x0.75)</option>
+                        <option value="1.0">Normal (x1.0)</option>
+                        <option value="1.5">Agudo (x1.5)</option>
+                        <option value="2.0">Muy Agudo (x2.0)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-500 block mb-2 uppercase">Volumen</label>
+                      <div className="flex bg-[#111] border border-[#333] rounded-xl overflow-hidden relative p-3 items-center gap-3">
+                        <span className="text-sm">🔇</span>
+                        <input 
+                          type="range" 
+                          min="0" max="1" step="0.1" 
+                          value={businessSettings.theme?.client_sound_volume !== undefined ? businessSettings.theme.client_sound_volume : 0.3} 
+                          onChange={(e) => {
+                            const updated = {...businessSettings, theme: {...businessSettings.theme, client_sound_volume: parseFloat(e.target.value)}};
+                            setBusinessSettings(updated);
+                          }} 
+                          onMouseUp={() => playNewOrderSound(undefined, true)}
+                          onTouchEnd={() => playNewOrderSound(undefined, true)}
+                          className="flex-1 accent-accent" 
+                        />
+                        <span className="text-sm">🔊</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                    <button type="button" onClick={() => playNewOrderSound(undefined, true)} className="bg-[#222] hover:bg-[#333] text-white px-4 py-2 rounded-xl text-sm font-bold border border-white/10 transition-colors">
+                      ▶ Reproducir de prueba
+                    </button>
+                  </div>
                </div>
             </div>
           </details>
@@ -935,7 +954,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
       {pastOrders.length > 0 && (
         <div className="mt-12 mb-8">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-400 flex items-center gap-2">Historial</h2>
+            <h2 className="text-xl font-bold text-gray-400 flex items-center gap-2">Historial de Turno</h2>
           </div>
           <div className="flex flex-col gap-2">
             {pastOrders.map(order => {
