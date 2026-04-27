@@ -22,7 +22,7 @@ export default async function handler(req: any, res: any) {
     const base64Data = imageBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
 
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3.1-pro-preview",
       contents: [
         {
           role: "user",

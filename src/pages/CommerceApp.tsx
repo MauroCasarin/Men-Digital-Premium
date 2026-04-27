@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { UtensilsCrossed, Clock, CheckCircle, Package, ChevronDown, ChevronUp, Settings, Plus, Save, Trash2, X } from 'lucide-react';
+import { UtensilsCrossed, Clock, CheckCircle, Package, ChevronDown, ChevronUp, Plus, Save, Trash2, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Order, Product } from '../types';
 import { PRODUCTS } from '../constants';

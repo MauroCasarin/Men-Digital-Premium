@@ -12,7 +12,6 @@ import {
   Plus, 
   Minus, 
   Trash2, 
-  Send, 
   X,
   PlusCircle,
   Clock,
@@ -374,19 +373,33 @@ export default function ClientApp() {
     if (!imgRef.current || !crop) return;
     const image = imgRef.current;
     const canvas = document.createElement('canvas');
-    const scaleX = image.naturalWidth / image.width;
-    const scaleY = image.naturalHeight / image.height;
-    canvas.width = (crop.width / 100) * image.naturalWidth;
-    canvas.height = (crop.height / 100) * image.naturalHeight;
+    
+    let x, y, width, height;
+    if (crop.unit === '%') {
+      x = (crop.x / 100) * image.naturalWidth;
+      y = (crop.y / 100) * image.naturalHeight;
+      width = (crop.width / 100) * image.naturalWidth;
+      height = (crop.height / 100) * image.naturalHeight;
+    } else {
+      const scaleX = image.naturalWidth / image.width;
+      const scaleY = image.naturalHeight / image.height;
+      x = crop.x * scaleX;
+      y = crop.y * scaleY;
+      width = crop.width * scaleX;
+      height = crop.height * scaleY;
+    }
+
+    canvas.width = width;
+    canvas.height = height;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(
       image,
-      (crop.x / 100) * image.naturalWidth,
-      (crop.y / 100) * image.naturalHeight,
-      canvas.width,
-      canvas.height,
-      0, 0, canvas.width, canvas.height
+      x,
+      y,
+      width,
+      height,
+      0, 0, width, height
     );
     setReceiptImage(canvas.toDataURL('image/jpeg', 0.9));
     setImageToCrop(null);
