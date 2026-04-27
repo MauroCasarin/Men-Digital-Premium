@@ -818,8 +818,7 @@ export default function ClientApp() {
                    
                    {paymentMode === 'select' ? (
                      <>
-                       {businessSettings.theme?.online_payments_hidden && (
-                         <button 
+                       <button 
                            onClick={() => handleCheckout('efectivo')}
                            disabled={isProcessing}
                            className="w-full bg-[#222] hover:bg-[#333] border border-border-dark text-white p-4 rounded-xl flex items-center justify-between transition-colors"
@@ -827,9 +826,7 @@ export default function ClientApp() {
                            <span className="font-bold">Efectivo al retirar</span>
                            <ChevronRight size={18} className="text-text-dim" />
                          </button>
-                       )}
-                       {businessSettings.theme?.online_payments_hidden && (
-                         <button 
+                       <button 
                            onClick={() => handleCheckout('tarjeta')}
                            disabled={isProcessing}
                            className="w-full bg-[#222] hover:bg-[#333] border border-border-dark text-white p-4 rounded-xl flex items-center justify-between transition-colors"
@@ -837,7 +834,6 @@ export default function ClientApp() {
                            <span className="font-bold">Tarjeta presencial</span>
                            <ChevronRight size={18} className="text-text-dim" />
                          </button>
-                       )}
                        {!businessSettings.theme?.online_payments_hidden && (businessSettings.alias || businessSettings.cbu) && (
                          <button 
                            onClick={() => setPaymentMode('transfer')}
@@ -1253,8 +1249,7 @@ export default function ClientApp() {
                       <h3 className="text-xl font-bold text-white mb-2 tracking-tight">Método de pago</h3>
                       {paymentMode === 'select' ? (
                         <>
-                          {businessSettings.theme?.online_payments_hidden && (
-                            <button 
+                          <button 
                               onClick={() => handleCheckout('efectivo')}
                               disabled={isProcessing}
                               className="w-full bg-[#1a1a1a] border border-border-dark text-white p-5 rounded-2xl flex items-center justify-between transition-colors active:bg-[#222]"
@@ -1262,9 +1257,7 @@ export default function ClientApp() {
                               <span className="font-bold">Efectivo al retirar</span>
                               <ChevronRight size={18} className="text-text-dim" />
                             </button>
-                          )}
-                          {businessSettings.theme?.online_payments_hidden && (
-                            <button 
+                          <button 
                               onClick={() => handleCheckout('tarjeta')}
                               disabled={isProcessing}
                               className="w-full bg-[#1a1a1a] border border-border-dark text-white p-5 rounded-2xl flex items-center justify-between transition-colors active:bg-[#222]"
@@ -1272,7 +1265,6 @@ export default function ClientApp() {
                               <span className="font-bold">Tarjeta presencial</span>
                               <ChevronRight size={18} className="text-text-dim" />
                             </button>
-                          )}
                           {!businessSettings.theme?.online_payments_hidden && (businessSettings.alias || businessSettings.cbu) && (
                             <button 
                               onClick={() => setPaymentMode('transfer')}
