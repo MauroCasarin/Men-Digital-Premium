@@ -1187,7 +1187,7 @@ export default function ClientApp() {
                         <>
                            <Clock size={64} className="text-yellow-500 mb-2 mx-auto animate-pulse" />
                            <h3 className="text-2xl font-bold text-white tracking-tight">Pedido Enviado</h3>
-                           <p className="text-sm text-text-dim">Esperando que el comercio comience a prepararlo.</p>
+                           <p className="text-sm text-text-dim"></p>
                         </>
                       )}
                     </motion.div>
