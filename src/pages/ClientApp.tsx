@@ -741,7 +741,13 @@ export default function ClientApp() {
                    initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
                    className="h-full flex flex-col items-center justify-center text-center gap-6 text-white py-12 px-4"
                  >
-                   {activeOrderStatus === 'on_the_way' ? (
+                   {activeOrderStatus === 'delivered' || activeOrderStatus === 'completed' ? (
+                     <>
+                        <CheckCircle size={80} className="text-green-500 mb-4 mx-auto" />
+                        <h3 className="text-2xl font-bold text-white tracking-tight">🎉 ¡Pedido Entregado!</h3>
+                        <p className="text-sm text-text-dim">Gracias por tu compra. ¡Esperamos verte pronto!</p>
+                     </>
+                   ) : activeOrderStatus === 'on_the_way' ? (
                      <>
                         <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity, duration: 1 }}>
                            <Clock size={80} className="text-orange-500 mb-4 mx-auto" />
@@ -779,8 +785,8 @@ export default function ClientApp() {
                    ) : (
                      <>
                         <Clock size={64} className="text-yellow-500 mb-2 mx-auto animate-pulse" />
-                        <h3 className="text-2xl font-bold text-white tracking-tight">Pedido Enviado</h3>
-                        <p className="text-sm text-text-dim">Esperando que el comercio comience a prepararlo.</p>
+                        <h3 className="text-2xl font-bold text-white tracking-tight">⏳ Pedido Recibido</h3>
+                        <p className="text-sm text-text-dim">El comercio confirmará tu pedido en instantes.</p>
                      </>
                    )}
                  </motion.div>
@@ -1148,7 +1154,13 @@ export default function ClientApp() {
                       initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                       className="h-full flex flex-col items-center justify-center text-center gap-6 text-white py-12 px-4"
                     >
-                      {activeOrderStatus === 'on_the_way' ? (
+                      {activeOrderStatus === 'delivered' || activeOrderStatus === 'completed' ? (
+                        <>
+                           <CheckCircle size={80} className="text-green-500 mb-4 mx-auto" />
+                           <h3 className="text-2xl font-bold text-white tracking-tight">🎉 ¡Pedido Entregado!</h3>
+                           <p className="text-sm text-text-dim">Gracias por tu compra. ¡Esperamos verte pronto!</p>
+                        </>
+                      ) : activeOrderStatus === 'on_the_way' ? (
                         <>
                            <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity, duration: 1 }}>
                               <Clock size={80} className="text-orange-500 mb-4 mx-auto" />
@@ -1186,8 +1198,8 @@ export default function ClientApp() {
                       ) : (
                         <>
                            <Clock size={64} className="text-yellow-500 mb-2 mx-auto animate-pulse" />
-                           <h3 className="text-2xl font-bold text-white tracking-tight">Pedido Enviado</h3>
-                           <p className="text-sm text-text-dim"></p>
+                           <h3 className="text-2xl font-bold text-white tracking-tight">⏳ Pedido Recibido</h3>
+                           <p className="text-sm text-text-dim">El comercio confirmará tu pedido en instantes.</p>
                         </>
                       )}
                     </motion.div>
