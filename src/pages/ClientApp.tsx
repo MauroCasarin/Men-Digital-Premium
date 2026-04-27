@@ -45,7 +45,7 @@ export default function ClientApp() {
   const [verdict, setVerdict] = useState<{valid: boolean, reason: string} | null>(null);
   const [paymentMode, setPaymentMode] = useState<'select' | 'transfer'>('select');
   const [originalReceiptImage, setOriginalReceiptImage] = useState<string | null>(null);
-  const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '', holder_name: '', name: 'TU NOMBRE.MENU', logo_url: '', categories: ['Menú', 'Bebidas'], theme: { accent: '#FFCC00', bg: '#0A0A0A', card: '#141414' } });
+  const [businessSettings, setBusinessSettings] = useState({ alias: '', cbu: '', holder_name: '', name: 'TU NOMBRE.MENU', logo_url: '', categories: ['Menú', 'Bebidas'], theme: { accent: '#FFCC00', bg: '#0A0A0A', card: '#141414', online_payments_hidden: false } });
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   useEffect(() => {
@@ -249,7 +249,8 @@ export default function ClientApp() {
               accent: data.theme?.accent || '#FFCC00',
               bg: data.theme?.bg || '#0A0A0A',
               card: data.theme?.card || '#141414',
-              hidden_categories: data.theme?.hidden_categories || data.hidden_categories || []
+              hidden_categories: data.theme?.hidden_categories || data.hidden_categories || [],
+              online_payments_hidden: data.theme?.online_payments_hidden || false
             }
           });
           if (data.categories && Array.isArray(data.categories) && data.categories.length > 0) {
@@ -288,7 +289,8 @@ export default function ClientApp() {
               accent: data.theme?.accent || '#FFCC00',
               bg: data.theme?.bg || '#0A0A0A',
               card: data.theme?.card || '#141414',
-              hidden_categories: data.theme?.hidden_categories || data.hidden_categories || []
+              hidden_categories: data.theme?.hidden_categories || data.hidden_categories || [],
+              online_payments_hidden: data.theme?.online_payments_hidden || false
             }
           });
           if (data.categories && Array.isArray(data.categories) && data.categories.length > 0) {
@@ -816,29 +818,33 @@ export default function ClientApp() {
                    
                    {paymentMode === 'select' ? (
                      <>
-                       <button 
-                         onClick={() => handleCheckout('efectivo')}
-                         disabled={isProcessing}
-                         className="w-full bg-[#222] hover:bg-[#333] border border-border-dark text-white p-4 rounded-xl flex items-center justify-between transition-colors"
-                       >
-                         <span className="font-bold">Efectivo al recibir</span>
-                         <ChevronRight size={18} className="text-text-dim" />
-                       </button>
-                       <button 
-                         onClick={() => handleCheckout('tarjeta')}
-                         disabled={isProcessing}
-                         className="w-full bg-[#222] hover:bg-[#333] border border-border-dark text-white p-4 rounded-xl flex items-center justify-between transition-colors"
-                       >
-                         <span className="font-bold">Tarjeta de Crédito / Débito presencial</span>
-                         <ChevronRight size={18} className="text-text-dim" />
-                       </button>
+                       {businessSettings.theme?.online_payments_hidden && (
+                         <button 
+                           onClick={() => handleCheckout('efectivo')}
+                           disabled={isProcessing}
+                           className="w-full bg-[#222] hover:bg-[#333] border border-border-dark text-white p-4 rounded-xl flex items-center justify-between transition-colors"
+                         >
+                           <span className="font-bold">Efectivo al retirar</span>
+                           <ChevronRight size={18} className="text-text-dim" />
+                         </button>
+                       )}
+                       {businessSettings.theme?.online_payments_hidden && (
+                         <button 
+                           onClick={() => handleCheckout('tarjeta')}
+                           disabled={isProcessing}
+                           className="w-full bg-[#222] hover:bg-[#333] border border-border-dark text-white p-4 rounded-xl flex items-center justify-between transition-colors"
+                         >
+                           <span className="font-bold">Tarjeta presencial</span>
+                           <ChevronRight size={18} className="text-text-dim" />
+                         </button>
+                       )}
                        {!businessSettings.theme?.online_payments_hidden && (businessSettings.alias || businessSettings.cbu) && (
                          <button 
                            onClick={() => setPaymentMode('transfer')}
                            disabled={isProcessing}
                            className="w-full bg-accent hover:bg-yellow-400 text-black p-4 rounded-xl flex items-center justify-between transition-colors mt-2"
                          >
-                           <span className="font-bold">Transferencia / MercadoPago (Subir Comprobante)</span>
+                           <span className="font-bold">Transferencia (Subir Comprobante)</span>
                            <ChevronRight size={18} />
                          </button>
                        )}
@@ -1247,29 +1253,33 @@ export default function ClientApp() {
                       <h3 className="text-xl font-bold text-white mb-2 tracking-tight">Método de pago</h3>
                       {paymentMode === 'select' ? (
                         <>
-                          <button 
-                            onClick={() => handleCheckout('efectivo')}
-                            disabled={isProcessing}
-                            className="w-full bg-[#1a1a1a] border border-border-dark text-white p-5 rounded-2xl flex items-center justify-between transition-colors active:bg-[#222]"
-                          >
-                            <span className="font-bold">Efectivo al recibir</span>
-                            <ChevronRight size={18} className="text-text-dim" />
-                          </button>
-                          <button 
-                            onClick={() => handleCheckout('tarjeta')}
-                            disabled={isProcessing}
-                            className="w-full bg-[#1a1a1a] border border-border-dark text-white p-5 rounded-2xl flex items-center justify-between transition-colors active:bg-[#222]"
-                          >
-                            <span className="font-bold">Tarjeta presencial</span>
-                            <ChevronRight size={18} className="text-text-dim" />
-                          </button>
+                          {businessSettings.theme?.online_payments_hidden && (
+                            <button 
+                              onClick={() => handleCheckout('efectivo')}
+                              disabled={isProcessing}
+                              className="w-full bg-[#1a1a1a] border border-border-dark text-white p-5 rounded-2xl flex items-center justify-between transition-colors active:bg-[#222]"
+                            >
+                              <span className="font-bold">Efectivo al retirar</span>
+                              <ChevronRight size={18} className="text-text-dim" />
+                            </button>
+                          )}
+                          {businessSettings.theme?.online_payments_hidden && (
+                            <button 
+                              onClick={() => handleCheckout('tarjeta')}
+                              disabled={isProcessing}
+                              className="w-full bg-[#1a1a1a] border border-border-dark text-white p-5 rounded-2xl flex items-center justify-between transition-colors active:bg-[#222]"
+                            >
+                              <span className="font-bold">Tarjeta presencial</span>
+                              <ChevronRight size={18} className="text-text-dim" />
+                            </button>
+                          )}
                           {!businessSettings.theme?.online_payments_hidden && (businessSettings.alias || businessSettings.cbu) && (
                             <button 
                               onClick={() => setPaymentMode('transfer')}
                               disabled={isProcessing}
-                              className="w-full bg-accent text-black p-5 rounded-2xl flex items-center justify-between transition-all active:scale-[0.98] shadow-xl shadow-accent/10"
+                              className="w-full bg-accent text-black p-5 rounded-2xl flex items-center justify-between transition-all active:scale-[0.98] shadow-xl shadow-accent/10 mt-2"
                             >
-                              <span className="font-black">TRANSFERENCIA / MP</span>
+                              <span className="font-black">TRANSFERENCIA (Comprobante)</span>
                               <ChevronRight size={18} />
                             </button>
                           )}

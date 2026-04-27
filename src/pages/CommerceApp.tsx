@@ -56,7 +56,8 @@ export default function CommerceApp() {
               accent: settingsData.theme?.accent || '#FFCC00',
               bg: settingsData.theme?.bg || '#0A0A0A',
               card: settingsData.theme?.card || '#141414',
-              hidden_categories: settingsData.theme?.hidden_categories || settingsData.hidden_categories || [] 
+              hidden_categories: settingsData.theme?.hidden_categories || settingsData.hidden_categories || [],
+              online_payments_hidden: settingsData.theme?.online_payments_hidden || false
             }
           });
         }
@@ -531,6 +532,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
             </div>
 
             <div>
+              <div className="flex flex-col gap-2 mb-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-sm font-black text-accent uppercase tracking-widest">Datos de Cobro (Pagos Online)</h3>
                 <label className="flex items-center gap-2 cursor-pointer bg-[#222] px-3 py-1.5 rounded-full border border-[#333]">
@@ -574,6 +576,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_cuit TEXT;`);
                     className="w-full bg-[#111] border border-[#333] p-3 rounded-xl focus:border-accent focus:outline-none text-white font-mono text-sm" 
                   />
                 </div>
+              </div>
               </div>
             </div>
             <div className="flex flex-col justify-center bg-accent/5 p-6 rounded-xl border border-accent/20">
